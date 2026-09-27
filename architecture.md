@@ -49,7 +49,7 @@ Author ──▶ Email Routing ──▶ Ingest Worker (Email handler)
 | `cleanup`   | Cron Trigger   | Retention: prune R2 + D1                                       |
 | `admin`     | HTTP + SPA     | JSON API + GUI: newsletters, subscribers, authors, campaigns, bounces |
 
-## D1 schema — `newsletter_db`
+## D1 schema — `cf-newsletter-db`
 
 The system is **multi-tenant**: a `newsletters` row is the parent of its own
 authors, subscribers and campaigns (all scoped by `newsletter_id`).
@@ -69,22 +69,22 @@ authors, subscribers and campaigns (all scoped by `newsletter_id`).
 - Indexes: `subscribers(status)`, `subscribers(newsletter_id)`, `campaigns(newsletter_id)`, `sends(campaign_id, status)`, `events(campaign_id, type)`, `attachments(campaign_id)`, `logs(ts)`, `logs(campaign_id)`.
 - Cascades: deleting a newsletter removes its authors/subscribers/campaigns; deleting a campaign removes its attachments/sends/events (`ON DELETE CASCADE`).
 
-## Queue — `newsletter-queue`
+## Queue — `cf-newsletter-queue`
 
 - Message: `{ campaignId, batch: [{subscriberId, email, name, token}] }` — recipients only; attachments referenced by `campaignId` (avoids 128 KB message limit).
-- Consumer: `max_batch_size: 10`, `max_concurrency: 5`, `max_retries: 3`, DLQ → `newsletter-dlq`.
+- Consumer: `max_batch_size: 10`, `max_concurrency: 5`, `max_retries: 3`, DLQ → `cf-newsletter-dlq`.
 
 ## R2 storage
 
-### `newsletter-archive`
+### `cf-newsletter-archive`
 
 - `campaigns/<id>/raw.eml` — original inbound MIME.
 - `campaigns/<id>/attachments/<sha256>` — deduped attachment bytes (metadata: filename, contentType, size, contentId).
 - `events/<yyyy-mm-dd>.ndjson` — long-term raw event log.
 
-### `newsletter-admin`
+### `cf-newsletter-admin`
 
-Static media lives in the `newsletter-admin` R2 bucket, bound as `ASSETS_R2`
+Static media lives in the `cf-newsletter-admin` R2 bucket, bound as `ASSETS_R2`
 and served read-only under `/media/*`. The `/media/` prefix avoids colliding
 with the Vite-built SPA bundle. Because the whole worker sits behind Access,
 these objects are only reachable by authenticated operators. The bucket is
@@ -94,7 +94,7 @@ wrangler v4's `r2 object` commands default to the *local* simulator and will
 silently not touch the production bucket without it):
 
 ```bash
-wrangler r2 object put newsletter-admin/header.png \
+wrangler r2 object put cf-newsletter-admin/header.png \
   --jurisdiction eu --remote --file ./header.png --content-type image/png
 ```
 

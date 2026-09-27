@@ -40,6 +40,7 @@ export interface Env {
   ASSETS_R2: R2Bucket;
   ARCHIVE: R2Bucket;
   APP_VERSION?: string;
+  APP_COMMIT?: string;
   // Warmup settings — kept in sync with the consumer worker so the admin GUI
   // can show the weekly schedule and current progression.
   WARMUP_SCHEDULE?: string;
@@ -159,6 +160,7 @@ export default {
         // configured. Used by the SPA to nudge a super_admin to finish setup.
         access_configured: Boolean(cfg.ACCESS_ACCOUNT_ID && cfg.ACCESS_LIST_ID),
         app_version: env.APP_VERSION ?? null,
+        app_commit: env.APP_COMMIT ?? null,
       });
     }
 
@@ -2532,7 +2534,7 @@ function ruleBody(env: Env, addr: string, enabled = true): string {
     name: `newsletter:${addr}`,
     enabled,
     matchers: [{ type: 'literal', field: 'to', value: addr }],
-    actions: [{ type: 'worker', value: [env.INGEST_WORKER_NAME ?? 'newsletter-ingest'] }],
+    actions: [{ type: 'worker', value: [env.INGEST_WORKER_NAME ?? 'cf-newsletter-ingest'] }],
   });
 }
 

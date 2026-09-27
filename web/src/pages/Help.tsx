@@ -64,7 +64,7 @@ export default function Help() {
         <p className="text-xs text-slate-400 dark:text-slate-500">
           Upload one with:{' '}
           <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">
-            wrangler r2 object put newsletter-admin/help.md --jurisdiction eu --remote --file ./docs/help.md --content-type text/markdown
+            wrangler r2 object put cf-newsletter-admin/help.md --jurisdiction eu --remote --file ./docs/help.md --content-type text/markdown
           </code>
         </p>
       </div>
@@ -148,7 +148,7 @@ function AboutCard() {
   return (
     <div className="border border-slate-200 rounded-lg dark:border-slate-700 overflow-hidden">
       <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 dark:bg-slate-800/60 dark:border-slate-700">
-        <h2 className="text-base font-medium">Newsletter Distribution</h2>
+        <h2 className="text-base font-medium">cf-newsletter</h2>
         <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">Serverless newsletter pipeline on Cloudflare Workers</p>
       </div>
       <div className="px-4 py-4 space-y-3 text-sm text-slate-700 dark:text-slate-300">

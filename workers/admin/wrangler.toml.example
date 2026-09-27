@@ -1,4 +1,5 @@
-name = "newsletter-admin"
+name = "cf-newsletter-admin"
+account_id = "REPLACE_WITH_ACCOUNT_ID"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 
@@ -29,7 +30,7 @@ routes = [{ pattern = "console.yourdomain.com", custom_domain = true }]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "newsletter_db"
+database_name = "cf-newsletter-db"
 database_id = "REPLACE_WITH_D1_ID"
 
 # Email Sending binding — used to send a welcome email to a newly added console
@@ -42,7 +43,7 @@ name = "SEND_EMAIL"
 # declared here or the binding won't resolve.
 [[r2_buckets]]
 binding = "ASSETS_R2"
-bucket_name = "newsletter-admin"
+bucket_name = "cf-newsletter-admin"
 jurisdiction = "eu"
 
 # Static SPA built from /web is emitted to ./public by `npm run build:web`.

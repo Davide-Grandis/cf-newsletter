@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Deploy the admin worker (Newsletter Admin Console).
+# Deploy the admin worker (cf-newsletter Admin Console).
 #
 # Builds the React SPA into workers/admin/public, then deploys the admin
 # worker. The worker is served on its custom hostname (configured in
@@ -21,19 +21,14 @@
 
 set -euo pipefail
 
-# Set CLOUDFLARE_ACCOUNT_ID in your environment before running if you have
-# multiple Cloudflare accounts and wrangler would otherwise prompt for one.
-# Example: export CLOUDFLARE_ACCOUNT_ID="your-account-id"
+# Deployment is locked by scripts/deploy.mjs to davideg-individual-account.
 
 # Resolve repo root from this script's location so it works from any cwd.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-echo "==> Building SPA"
-npm run build:web
-
-echo "==> Deploying admin worker"
-(cd workers/admin && npx wrangler deploy)
+echo "==> Verifying account and deploying admin worker"
+npm run deploy:admin
 
 echo "==> Pushing to GitHub"
 if [[ -n "$(git status --porcelain)" ]]; then

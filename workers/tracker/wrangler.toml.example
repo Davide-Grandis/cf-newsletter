@@ -1,4 +1,5 @@
-name = "newsletter-tracker"
+name = "cf-newsletter-tracker"
+account_id = "REPLACE_WITH_ACCOUNT_ID"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 
@@ -10,12 +11,12 @@ routes = [{ pattern = "track.yourdomain.com", custom_domain = true }]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "newsletter_db"
+database_name = "cf-newsletter-db"
 database_id = "REPLACE_WITH_D1_ID"
 
 [[r2_buckets]]
 binding = "ARCHIVE"
-bucket_name = "newsletter-archive"
+bucket_name = "cf-newsletter-archive"
 
 # Email Sending binding — delivers the double opt-in confirmation email for the
 # public subscribe page. Requires Email Sending (DKIM) enabled on the domain.

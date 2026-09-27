@@ -10,6 +10,7 @@ workers/admin/public/
 # vite build cache
 web/dist/
 web/tsconfig.tsbuildinfo
+dist/release/
 
 # DB migrations are local only — db/schema.sql is the authoritative schema
 db/migrations/

@@ -1,4 +1,5 @@
-name = "newsletter-cleanup"
+name = "cf-newsletter-cleanup"
+account_id = "REPLACE_WITH_ACCOUNT_ID"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 
@@ -7,12 +8,12 @@ compatibility_date = "2025-01-15"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "newsletter_db"
+database_name = "cf-newsletter-db"
 database_id = "REPLACE_WITH_D1_ID"
 
 [[r2_buckets]]
 binding = "ARCHIVE"
-bucket_name = "newsletter-archive"
+bucket_name = "cf-newsletter-archive"
 
 # Runs once daily at 04:00 UTC to purge campaigns older than RETENTION_DAYS.
 [triggers]

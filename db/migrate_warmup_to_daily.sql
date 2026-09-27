@@ -1,7 +1,7 @@
 -- Migration: switch warmup_state from weekly-level model to daily-progression model.
 --
 -- Run once against the live D1 database:
---   npx wrangler d1 execute newsletter_db --remote \
+--   npx wrangler d1 execute cf-newsletter-db --remote \
 --     --file=db/migrate_warmup_to_daily.sql
 --
 -- What it does:

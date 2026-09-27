@@ -182,15 +182,12 @@ function Layout() {
         </main>
       </div>
 
-      <Footer />
+      <Footer version={me.data?.app_version ?? null} commit={me.data?.app_commit ?? null} />
     </div>
   );
 }
 
-const APP_VERSION = '2.2';
-const LAST_UPDATED = 'Sep 20, 2026';
-
-function Footer() {
+function Footer({ version, commit }: { version: string | null; commit: string | null }) {
   return (
     <footer className="shrink-0 border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 px-4 py-3">
       <div className="flex justify-center text-xs text-slate-500 dark:text-slate-400">
@@ -198,6 +195,10 @@ function Footer() {
           Built with
           <HeartIcon />
           on Cloudflare Workers
+        </span>
+        <span className="ml-3" title={commit ?? undefined}>
+          cf-newsletter {version ?? import.meta.env.VITE_PRODUCT_VERSION}
+          {version && version !== import.meta.env.VITE_PRODUCT_VERSION ? ' (UI version differs)' : ''}
         </span>
       </div>
     </footer>

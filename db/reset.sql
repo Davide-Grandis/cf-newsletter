@@ -1,8 +1,8 @@
 -- Destructive reset: drops every table so schema.sql can recreate the DB from
 -- scratch. Use ONLY when the existing data is disposable.
 --
---   wrangler d1 execute newsletter_db --remote --file=db/reset.sql
---   wrangler d1 execute newsletter_db --remote --file=db/schema.sql
+--   wrangler d1 execute cf-newsletter-db --remote --file=db/reset.sql
+--   wrangler d1 execute cf-newsletter-db --remote --file=db/schema.sql
 
 PRAGMA foreign_keys = OFF;
 

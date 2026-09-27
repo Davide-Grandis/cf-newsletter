@@ -150,7 +150,7 @@ worker.
   ```bash
   wrangler dev workers/cleanup/src/index.ts  # then trigger scheduled event
   # or
-  wrangler tail newsletter-cleanup           # watch the next nightly run
+  wrangler tail cf-newsletter-cleanup           # watch the next nightly run
   ```
 - **Short windows and active campaigns.** If `RETENTION_DAYS` is set very short
   (e.g. 7), campaigns that are still in `sending` status (e.g. throttled by

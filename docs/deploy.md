@@ -18,19 +18,18 @@ node --version
 # Wrangler 3
 npx wrangler --version
 
-# Authenticate to the target Cloudflare account.
-# This opens a browser; pick the account that owns your zone.
+# Authenticate with credentials that can access davideg-individual-account.
 npx wrangler login
 
-# Confirm.
+# Confirm access and lock this shell to the allowed account.
 npx wrangler whoami
+export CLOUDFLARE_ACCOUNT_ID=2c7a54ba6843fd28e1ab295fd1535687
+npm run deploy:check
 ```
 
-If you have multiple accounts, export the right one for the rest of the
-session so wrangler doesn't prompt:
-
-```bash
-export CLOUDFLARE_ACCOUNT_ID=<your-account-id>
+Repository deployment commands are locked to `davideg-individual-account`
+(`2c7a54ba6843fd28e1ab295fd1535687`) and fail before building or deploying
+when another account is requested.
 ```
 
 Install repo dependencies (workers + SPA):
@@ -48,7 +47,7 @@ Each command prints an ID. **Copy them**; you'll paste them into the
 ### 1.1 D1 database
 
 ```bash
-npx wrangler d1 create newsletter_db
+npx wrangler d1 create cf-newsletter-db
 # Output:
 # database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ```
@@ -57,7 +56,7 @@ Apply the schema (one-shot bootstrap — required so the admin worker has
 tables to talk to):
 
 ```bash
-npx wrangler d1 execute newsletter_db --remote --file=db/schema.sql
+npm run db:apply
 ```
 
 Everything else (seeding the first author, adding subscribers, etc.) is
@@ -67,8 +66,8 @@ section 9.1.
 ### 1.2 Queues
 
 ```bash
-npx wrangler queues create newsletter-queue
-npx wrangler queues create newsletter-dlq
+npx wrangler queues create cf-newsletter-queue
+npx wrangler queues create cf-newsletter-dlq
 ```
 
 (No IDs to copy; bindings reference queues by name.)
@@ -76,7 +75,8 @@ npx wrangler queues create newsletter-dlq
 ### 1.3 R2 bucket
 
 ```bash
-npx wrangler r2 bucket create newsletter-archive
+npx wrangler r2 bucket create cf-newsletter-archive
+npx wrangler r2 bucket create cf-newsletter-admin --jurisdiction eu
 ```
 
 ## 2. Patch `database_id` into all six wrangler configs
@@ -86,8 +86,9 @@ worker configs:
 
 ```bash
 DB_ID="paste-the-uuid-here"
+ACCOUNT_ID="2c7a54ba6843fd28e1ab295fd1535687"
 for f in workers/{ingest,consumer,tracker,bounce,cleanup,admin}/wrangler.toml; do
-  sed -i.bak "s/REPLACE_WITH_D1_ID/$DB_ID/" "$f" && rm "$f.bak"
+  sed -i.bak -e "s/REPLACE_WITH_D1_ID/$DB_ID/" -e "s/REPLACE_WITH_ACCOUNT_ID/$ACCOUNT_ID/" "$f" && rm "$f.bak"
 done
 
 grep database_id workers/*/wrangler.toml   # confirm
@@ -157,13 +158,12 @@ npm run deploy:all
 If you'd rather deploy one at a time (e.g. to debug):
 
 ```bash
-npm run build:web
-(cd workers/ingest    && npx wrangler deploy)
-(cd workers/consumer  && npx wrangler deploy)
-(cd workers/tracker   && npx wrangler deploy)
-(cd workers/bounce    && npx wrangler deploy)
-(cd workers/cleanup   && npx wrangler deploy)
-(cd workers/admin     && npx wrangler deploy)
+npm run deploy:ingest
+npm run deploy:consumer
+npm run deploy:tracker
+npm run deploy:bounce
+npm run deploy:cleanup
+npm run deploy:admin
 ```
 
 After each deploy, wrangler prints the worker's `*.workers.dev` URL. Save
@@ -175,8 +175,8 @@ Dashboard → Email Routing → **Routes**.
 
 | Match                                | Action                              |
 | ------------------------------------ | ----------------------------------- |
-| `newsletter@yourdomain.com` | Send to Worker → `newsletter-ingest`|
-| catch-all               | Send to Worker → `newsletter-bounce`|
+| `newsletter@yourdomain.com` | Send to Worker → `cf-newsletter-ingest`|
+| catch-all               | Send to Worker → `cf-newsletter-bounce`|
 
 The catch-all rule delivers all other inbound mail (including `unsubscribe+*`
 mailto replies) to the bounce worker. Bounces are detected via the Cloudflare
@@ -194,7 +194,7 @@ routes = [{ pattern = "track.yourdomain.com/*", custom_domain = true }]
 Then redeploy:
 
 ```bash
-(cd workers/tracker && npx wrangler deploy)
+npm run deploy:tracker
 ```
 
 ## 8. Put the admin GUI behind Cloudflare Access (REQUIRED)
@@ -219,7 +219,7 @@ button hits `/cdn-cgi/access/logout`.
 Open the admin URL in a browser (Access will prompt for SSO):
 
 ```
-https://newsletter-admin.<your-subdomain>.workers.dev/
+https://cf-newsletter-admin.<your-subdomain>.workers.dev/
 ```
 
 Then, using the GUI:
@@ -237,8 +237,8 @@ Then, using the GUI:
 echo "Hello world" | mail -s "Test campaign" newsletter@yourdomain.com
 
 # Watch logs.
-npx wrangler tail newsletter-ingest
-npx wrangler tail newsletter-consumer
+npx wrangler tail cf-newsletter-ingest
+npx wrangler tail cf-newsletter-consumer
 ```
 
 If ingest logs `Sender not authorized`, the inbound `From:` doesn't match
@@ -263,8 +263,8 @@ WARMUP_START_DATE = "2026-04-28"   # today's UTC date
 Redeploy both:
 
 ```bash
-(cd workers/consumer && npx wrangler deploy)
-(cd workers/admin    && npx wrangler deploy)
+npm run deploy:consumer
+npm run deploy:admin
 ```
 
 The Dashboard's Quota panel will start showing daily/weekly caps.

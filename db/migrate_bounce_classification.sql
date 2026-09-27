@@ -1,7 +1,7 @@
 -- Migration: split bounce counters and record last-bounce classification.
 --
 -- Run once against the live D1 database:
---   npx wrangler d1 execute newsletter_db --remote \
+--   npx wrangler d1 execute cf-newsletter-db --remote \
 --     --file=db/migrate_bounce_classification.sql
 --
 -- What it does:

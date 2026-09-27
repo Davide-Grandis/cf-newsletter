@@ -1,7 +1,7 @@
 -- Migration: strip redundant source prefix from log events.
 --
 -- Run once against the live D1 database:
---   npx wrangler d1 execute newsletter_db --remote \
+--   npx wrangler d1 execute cf-newsletter-db --remote \
 --     --file=db/migrate_strip_event_prefix.sql
 --
 -- Before: event = 'consumer.send_success', source = 'consumer'

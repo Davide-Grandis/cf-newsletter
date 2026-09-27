@@ -36,6 +36,8 @@ export interface Identity {
   protected_by_access: boolean;
   // Whether the Cloudflare Access login settings (account + list IDs) are set.
   access_configured: boolean;
+  app_version: string | null;
+  app_commit: string | null;
 }
 
 export function useIdentity() {

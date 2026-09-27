@@ -1,4 +1,4 @@
-# Newsletter Distribution on Cloudflare
+# cf-newsletter
 
 A self-hosted newsletter distribution solution for teams that want to author
 campaigns by email and manage multiple lists from a secure web console. It
@@ -36,21 +36,25 @@ Before running the browser-based installer, the target Cloudflare account must h
 - Email Sending and Email Routing available for the zone;
 - Zero Trust Access available.
 
-The installer asks for a short-lived API token with these permissions:
+The installer asks for two API tokens restricted to the target account and zone:
 
-- **Account:** Workers Scripts Edit, D1 Edit, Queues Edit, Workers R2
-  Storage Edit, Access Organizations/Identity Providers/Groups Edit, Access
-  Apps and Policies Edit, Zero Trust Edit and Email Sending Read;
-- **Zone:** Zone Read, Zone Settings Edit, Workers Routes Edit, Email Routing
-  Rules Edit and Analytics Read.
+- **Short-lived installation token:** Account Workers Scripts Edit, D1 Edit,
+  Queues Edit, Workers R2 Storage Edit, Access Organizations/Identity
+  Providers/Groups Edit, Access Apps and Policies Edit, and Zero Trust Edit;
+  Zone Read, Workers Routes Edit, and, for fresh installations, Zone Settings
+  Edit and Email Routing Rules Edit.
+- **Runtime automation token:** Account Email Sending Read, Workers Scripts
+  Read, and Zero Trust Edit; Zone Read, Email Routing Rules Edit, and Analytics
+  Read. This token is installed as encrypted Worker secrets on fresh installs.
 
-Restrict the token to the target account and zone, and revoke it after use.
+Revoke the short-lived installation token after use; keep the runtime token
+active for application automation.
 
 Note: no GitHub account or repository is required.
 
 ### Installer
 
-<a href="https://cf-newsletter-installer.davideslab.eu/"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy cf-newsletter to Cloudflare"></a>
+<a href="https://installer.davideslab.eu/"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy cf-newsletter to Cloudflare"></a>
 
 Enter the target account ID, domain and Cloudflare administrator email, then
 follow the on-screen instructions.
@@ -62,6 +66,15 @@ the selected domain if necessary, and wait for DNS/DKIM to become active.
 
 To install a newer release, open the same hosted installer and follow the
 on-screen instructions. Existing data and configuration are preserved.
+
+Product releases are tagged `vX.Y.Z` and include a verified, prebuilt
+`cf-newsletter-X.Y.Z.json` asset containing all six Workers, the admin SPA,
+schema, and migrations. The hosted installer discovers the latest stable GitHub
+Release when opened; its staging channel can select a prerelease. Build a
+release only from a clean commit whose tag matches the root `package.json`
+version with `npm run build:release`, then publish it with the manually triggered
+Product release GitHub Actions workflow. `npm run test:release` creates and
+checks an unpublished development artifact without deploying anything.
 
 ## Documentation
 

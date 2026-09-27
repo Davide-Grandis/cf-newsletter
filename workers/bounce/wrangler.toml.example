@@ -1,4 +1,5 @@
-name = "newsletter-bounce"
+name = "cf-newsletter-bounce"
+account_id = "REPLACE_WITH_ACCOUNT_ID"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
@@ -11,12 +12,12 @@ compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "newsletter_db"
+database_name = "cf-newsletter-db"
 database_id = "REPLACE_WITH_D1_ID"
 
 [[r2_buckets]]
 binding = "ARCHIVE"
-bucket_name = "newsletter-archive"
+bucket_name = "cf-newsletter-archive"
 
 # Runs every 30 minutes. Each tick processes due post-send bounce-check bursts
 # and runs the daily delivery-failure sync at 04:00 UTC.
@@ -24,4 +25,4 @@ bucket_name = "newsletter-archive"
 crons = ["*/30 * * * *"]
 
 # Email Routing rule (configured in the Cloudflare dashboard):
-#   catch-all (or unsubscribe+*@yourdomain.com)  -> Worker `newsletter-bounce`  (one-click unsub)
+#   catch-all (or unsubscribe+*@yourdomain.com)  -> Worker `cf-newsletter-bounce`  (one-click unsub)

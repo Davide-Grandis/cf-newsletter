@@ -11,7 +11,25 @@ import process from 'node:process';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const productVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+const revision = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });
+const productCommit = revision.status === 0 ? revision.stdout.trim() : 'unknown';
 const workers = ['ingest', 'consumer', 'tracker', 'bounce', 'cleanup', 'admin'];
+const resources = {
+  workerPrefix: 'cf-newsletter',
+  database: 'cf-newsletter-db',
+  queue: 'cf-newsletter-queue',
+  deadLetterQueue: 'cf-newsletter-dlq',
+  archiveBucket: 'cf-newsletter-archive',
+  adminBucket: 'cf-newsletter-admin',
+};
+const legacyResources = {
+  workerPrefix: 'newsletter',
+  database: 'newsletter_db',
+  queue: 'newsletter-queue',
+  deadLetterQueue: 'newsletter-dlq',
+  archiveBucket: 'newsletter-archive',
+  adminBucket: 'newsletter-admin',
+};
 const dryRun = process.argv.includes('--dry-run');
 let muteOutput = false;
 const promptOutput = new Writable({
@@ -143,22 +161,58 @@ async function ensureCliResource(name, listArgs, createArgs) {
   wrangler(createArgs);
 }
 
+async function detectInstallation() {
+  if (dryRun) return 'fresh';
+  const databases = JSON.parse(wrangler(['d1', 'list', '--json'], { capture: true }));
+  const queues = wrangler(['queues', 'list'], { capture: true });
+  const buckets = wrangler(['r2', 'bucket', 'list'], { capture: true });
+  const scripts = await cf(`/accounts/${accountId}/workers/scripts`);
+  const workerNames = new Set((scripts.result ?? []).map((item) => item.id ?? item.name).filter(Boolean));
+
+  const matches = (names) => [
+    databases.some((item) => item.name === names.database) && names.database,
+    containsResource(queues, names.queue) && names.queue,
+    containsResource(queues, names.deadLetterQueue) && names.deadLetterQueue,
+    containsResource(buckets, names.archiveBucket) && names.archiveBucket,
+    containsResource(buckets, names.adminBucket) && names.adminBucket,
+    ...workers.map((worker) => {
+      const name = `${names.workerPrefix}-${worker}`;
+      return workerNames.has(name) && name;
+    }),
+  ].filter(Boolean);
+
+  const current = matches(resources);
+  const legacy = matches(legacyResources);
+  if (current.length && legacy.length) {
+    fail(`Mixed current and legacy resources detected. Current: ${current.join(', ')}. Legacy: ${legacy.join(', ')}. Resolve the interrupted migration before installing.`);
+  }
+  if (legacy.length) {
+    fail(`Legacy 2.2 resources detected: ${legacy.join(', ')}. Migration is required before this installer can deploy cf-newsletter-* resources; no resources were changed.`);
+  }
+  if (current.length) {
+    status('detected', `existing cf-newsletter installation (${current.length} resources)`);
+    return 'current';
+  }
+  status('detected', 'fresh installation');
+  return 'fresh';
+}
+
 async function ensureD1() {
   if (dryRun) {
-    status('would ensure', 'D1 newsletter_db');
+    status('would ensure', `D1 ${resources.database}`);
     return '00000000-0000-0000-0000-000000000000';
   }
   let databases = JSON.parse(wrangler(['d1', 'list', '--json'], { capture: true }));
-  let database = databases.find((item) => item.name === 'newsletter_db');
+  let database = databases.find((item) => item.name === resources.database);
   if (!database) {
-    status('creating', 'D1 newsletter_db');
-    wrangler(['d1', 'create', 'newsletter_db', '--jurisdiction', 'eu']);
+    status('creating', `D1 ${resources.database}`);
+    wrangler(['d1', 'create', resources.database, '--jurisdiction', 'eu']);
     databases = JSON.parse(wrangler(['d1', 'list', '--json'], { capture: true }));
-    database = databases.find((item) => item.name === 'newsletter_db');
+    database = databases.find((item) => item.name === resources.database);
   } else {
-    status('reusing', 'D1 newsletter_db');
+    status('reusing', `D1 ${resources.database}`);
   }
-  if (!database?.uuid) fail('Could not resolve the newsletter_db database ID.');
+  if (!database?.uuid) fail(`Could not resolve the ${resources.database} database ID.`);
   return database.uuid;
 }
 
@@ -167,6 +221,7 @@ function generateConfigs(databaseId, domain) {
     const templatePath = join(root, 'workers', worker, 'wrangler.toml.example');
     const configPath = join(root, 'workers', worker, 'wrangler.toml');
     let content = readFileSync(templatePath, 'utf8').replaceAll('REPLACE_WITH_D1_ID', databaseId);
+    content = content.replaceAll('REPLACE_WITH_ACCOUNT_ID', accountId);
     content = content.replaceAll('yourdomain.com', domain);
     status(dryRun ? 'would write' : 'writing', `workers/${worker}/wrangler.toml`);
     if (!dryRun) writeFileSync(configPath, content);
@@ -187,12 +242,12 @@ async function ensureAccessOrganization(teamName) {
   status('creating', `Access organization ${teamName}.cloudflareaccess.com`);
   await cf(`/accounts/${accountId}/access/organizations`, {
     method: 'POST',
-    body: { name: 'Newsletter Platform', auth_domain: `${teamName}.cloudflareaccess.com` },
+    body: { name: 'cf-newsletter Platform', auth_domain: `${teamName}.cloudflareaccess.com` },
   });
 }
 
 async function ensureAccessList(adminEmail) {
-  const name = 'Newsletter Console Administrators';
+  const name = 'cf-newsletter Console Administrators';
   if (dryRun) {
     status('would ensure', `Access email list with ${adminEmail}`);
     return '00000000-0000-0000-0000-000000000000';
@@ -234,7 +289,7 @@ async function ensureAccessApplication(domain, listId) {
     status('creating', `Access application ${hostname}`);
     const created = await cf(`/accounts/${accountId}/access/apps`, {
       method: 'POST',
-      body: { name: 'Newsletter Admin Console', domain: hostname, type: 'self_hosted', session_duration: '24h' },
+      body: { name: 'cf-newsletter Admin Console', domain: hostname, type: 'self_hosted', session_duration: '24h' },
     });
     app = created.result;
   } else {
@@ -242,7 +297,7 @@ async function ensureAccessApplication(domain, listId) {
   }
   if (!app?.id) fail('Could not resolve the Access application ID.');
   const policies = await cf(`/accounts/${accountId}/access/apps/${app.id}/policies`);
-  if ((policies.result ?? []).some((policy) => policy.name === 'Newsletter administrators')) {
+  if ((policies.result ?? []).some((policy) => policy.name === 'cf-newsletter administrators')) {
     status('reusing', 'Access allow policy');
     return;
   }
@@ -250,7 +305,7 @@ async function ensureAccessApplication(domain, listId) {
   await cf(`/accounts/${accountId}/access/apps/${app.id}/policies`, {
     method: 'POST',
     body: {
-      name: 'Newsletter administrators',
+      name: 'cf-newsletter administrators',
       decision: 'allow',
       precedence: 1,
       include: [{ email_list: { id: listId } }],
@@ -279,30 +334,30 @@ async function ensureEmailRouting(zoneId, domain) {
         name: 'Newsletter inbound',
         enabled: true,
         matchers: [{ type: 'literal', field: 'to', value: address }],
-        actions: [{ type: 'worker', value: ['newsletter-ingest'] }],
+        actions: [{ type: 'worker', value: [`${resources.workerPrefix}-ingest`] }],
       },
     });
   }
-  status('configuring', 'catch-all rule for newsletter-bounce');
+  status('configuring', `catch-all rule for ${resources.workerPrefix}-bounce`);
   await cf(`/zones/${zoneId}/email/routing/rules/catch_all`, {
     method: 'PUT',
     body: {
       name: 'Newsletter unsubscribe and bounce handling',
       enabled: true,
       matchers: [{ type: 'all' }],
-      actions: [{ type: 'worker', value: ['newsletter-bounce'] }],
+      actions: [{ type: 'worker', value: [`${resources.workerPrefix}-bounce`] }],
     },
   });
 }
 
 function putSecrets(worker, secrets) {
   if (!Object.keys(secrets).length) return;
-  status(dryRun ? 'would set' : 'setting', `${Object.keys(secrets).join(', ')} on newsletter-${worker}`);
-  wrangler(['secret', 'bulk', '--name', `newsletter-${worker}`], { input: JSON.stringify(secrets) });
+  status(dryRun ? 'would set' : 'setting', `${Object.keys(secrets).join(', ')} on ${resources.workerPrefix}-${worker}`);
+  wrangler(['secret', 'bulk', '--name', `${resources.workerPrefix}-${worker}`], { input: JSON.stringify(secrets) });
 }
 
 async function main() {
-  console.log('\nNewsletter platform installer\n');
+  console.log('\ncf-newsletter installer\n');
   console.log('Create a short-lived Cloudflare API token scoped to the target account and zone with:');
   console.log('  Account: Workers Scripts Edit, D1 Edit, Queues Edit, Workers R2 Storage Edit');
   console.log('  Account: Access Organizations/Identity Providers/Groups Write');
@@ -315,7 +370,7 @@ async function main() {
   const domain = validate((await prompt('Cloudflare zone domain')).toLowerCase(), /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i, 'domain');
   const adminEmail = validate((await prompt('Cloudflare administrator email (becomes cf-newsletter super admin)')).toLowerCase(), /^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'email');
   const fromAddress = validate((await prompt('Default sender address', `newsletter@${domain}`)).toLowerCase(), /^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'sender address');
-  const defaultTeamName = `newsletter-${accountId.slice(0, 8)}`;
+  const defaultTeamName = `cf-newsletter-${accountId.slice(0, 8)}`;
   const teamName = validate((await prompt('Zero Trust team name', defaultTeamName)).toLowerCase(), /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/, 'Zero Trust team name');
   if (!dryRun) installToken = await secret('Short-lived installation API token', true);
 
@@ -337,6 +392,7 @@ async function main() {
   const zones = await cf(`/zones?name=${encodeURIComponent(domain)}&account.id=${accountId}`);
   const zoneId = dryRun ? '00000000000000000000000000000000' : zones.result?.[0]?.id;
   if (!zoneId) fail(`Zone ${domain} was not found in account ${accountId}.`);
+  const installation = await detectInstallation();
 
   step('Installing project dependencies');
   status(dryRun ? 'would install' : 'installing', 'Worker dependencies');
@@ -346,17 +402,17 @@ async function main() {
 
   step('Provisioning D1, Queues and R2');
   const databaseId = await ensureD1();
-  await ensureCliResource('newsletter-queue', ['queues', 'list'], ['queues', 'create', 'newsletter-queue']);
-  await ensureCliResource('newsletter-dlq', ['queues', 'list'], ['queues', 'create', 'newsletter-dlq']);
-  await ensureCliResource('newsletter-archive', ['r2', 'bucket', 'list'], ['r2', 'bucket', 'create', 'newsletter-archive']);
-  await ensureCliResource('newsletter-admin', ['r2', 'bucket', 'list', '--jurisdiction', 'eu'], ['r2', 'bucket', 'create', 'newsletter-admin', '--jurisdiction', 'eu']);
+  await ensureCliResource(resources.queue, ['queues', 'list'], ['queues', 'create', resources.queue]);
+  await ensureCliResource(resources.deadLetterQueue, ['queues', 'list'], ['queues', 'create', resources.deadLetterQueue]);
+  await ensureCliResource(resources.archiveBucket, ['r2', 'bucket', 'list'], ['r2', 'bucket', 'create', resources.archiveBucket]);
+  await ensureCliResource(resources.adminBucket, ['r2', 'bucket', 'list', '--jurisdiction', 'eu'], ['r2', 'bucket', 'create', resources.adminBucket, '--jurisdiction', 'eu']);
 
   step('Generating all six Worker configurations');
   generateConfigs(databaseId, domain);
 
   step('Applying the D1 schema');
-  status('configuring', 'newsletter_db schema');
-  wrangler(['d1', 'execute', 'newsletter_db', '--remote', '--file', 'db/schema.sql', '--yes']);
+  status('configuring', `${resources.database} schema`);
+  wrangler(['d1', 'execute', resources.database, '--remote', '--file', 'db/schema.sql', '--yes']);
 
   step('Configuring Cloudflare Zero Trust and Access');
   await ensureAccessOrganization(teamName);
@@ -370,30 +426,34 @@ async function main() {
     ACCESS_LIST_ID: accessListId,
     FROM_ADDRESS: fromAddress,
     TRACKING_BASE_URL: `https://track.${domain}`,
-    INGEST_WORKER_NAME: 'newsletter-ingest',
+    INGEST_WORKER_NAME: `${resources.workerPrefix}-ingest`,
   };
   const settingValues = Object.entries(settings)
     .map(([key, value]) => `(${escapeSql(key)}, ${escapeSql(value)})`)
     .join(', ');
-  const seedSql = `INSERT INTO settings (key, value) VALUES ${settingValues} ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now'); INSERT INTO admins (email, role) VALUES (${escapeSql(adminEmail)}, 'super_admin') ON CONFLICT(email) DO UPDATE SET role='super_admin', updated_at=datetime('now'); INSERT INTO deployment_metadata (key, value) VALUES ('product_version', ${escapeSql(productVersion)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now');`;
+  const seedSql = `INSERT INTO settings (key, value) VALUES ${settingValues} ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now'); INSERT INTO admins (email, role) VALUES (${escapeSql(adminEmail)}, 'super_admin') ON CONFLICT(email) DO UPDATE SET role='super_admin', updated_at=datetime('now');`;
   step('Configuring cf-newsletter and its super admin');
   status('configuring', 'deployment settings');
   status('assigning', `${adminEmail} as super_admin`);
-  wrangler(['d1', 'execute', 'newsletter_db', '--remote', '--command', seedSql, '--yes']);
+  wrangler(['d1', 'execute', resources.database, '--remote', '--command', seedSql, '--yes']);
 
   step('Building and deploying all Workers');
   status('building', 'admin web console');
   run('npm', ['run', 'build:web']);
   for (const worker of workers) {
-    status(dryRun ? 'would deploy' : 'deploying', `newsletter-${worker}`);
-    wrangler(['deploy'], { cwd: join(root, 'workers', worker) });
+    status(dryRun ? 'would deploy' : 'deploying', `${resources.workerPrefix}-${worker}`);
+    wrangler(['deploy', '--var', `APP_VERSION:${productVersion}`, '--var', `APP_COMMIT:${productCommit}`], { cwd: join(root, 'workers', worker) });
   }
 
-  step('Generating and installing Worker secrets');
-  const linkKey = randomBytes(48).toString('base64');
-  const attachmentKey = randomBytes(48).toString('base64');
-  putSecrets('consumer', { LINK_SIGNING_KEY: linkKey, ATTACHMENT_SIGNING_KEY: attachmentKey });
-  putSecrets('tracker', { LINK_SIGNING_KEY: linkKey, ATTACHMENT_SIGNING_KEY: attachmentKey });
+  step('Configuring Worker secrets');
+  if (installation === 'fresh') {
+    const linkKey = randomBytes(48).toString('base64');
+    const attachmentKey = randomBytes(48).toString('base64');
+    putSecrets('consumer', { LINK_SIGNING_KEY: linkKey, ATTACHMENT_SIGNING_KEY: attachmentKey });
+    putSecrets('tracker', { LINK_SIGNING_KEY: linkKey, ATTACHMENT_SIGNING_KEY: attachmentKey });
+  } else {
+    status('preserving', 'existing signing secrets');
+  }
 
   const configureRuntime = await confirm('Configure optional Cloudflare API automation tokens now?', true);
   if (configureRuntime && !dryRun) {
@@ -419,10 +479,13 @@ async function main() {
   if (existsSync(join(root, 'docs', 'help.md'))) {
     status(dryRun ? 'would upload' : 'uploading', 'docs/help.md to R2');
     wrangler([
-      'r2', 'object', 'put', 'newsletter-admin/help.md', '--jurisdiction', 'eu', '--remote',
+      'r2', 'object', 'put', `${resources.adminBucket}/help.md`, '--jurisdiction', 'eu', '--remote',
       '--file', './docs/help.md', '--content-type', 'text/markdown',
     ]);
   }
+
+  const deployedSql = `INSERT INTO deployment_metadata(key,value) VALUES ('product_version', ${escapeSql(productVersion)}), ('product_commit', ${escapeSql(productCommit)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')`;
+  wrangler(['d1', 'execute', resources.database, '--remote', '--command', deployedSql, '--yes']);
 
   console.log('\nInstallation complete.');
   console.log(`Admin console: https://console.${domain}`);

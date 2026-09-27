@@ -1,4 +1,4 @@
-# Newsletter Admin Console — Help
+# cf-newsletter Admin Console — Help
 
 This console manages one or more **newsletters**. Each newsletter is an
 independent mailing list with its own inbound email address, author allow-list
@@ -61,7 +61,7 @@ How it works:
 **Recommended after installation (super admin):** Turnstile protection starts
 disabled. Create a Turnstile widget for the tracking domain, set the matching
 secret on the tracker worker (`wrangler secret put TURNSTILE_SECRET_KEY --name
-newsletter-tracker`), then open **Settings → Subscribe → Public signup**, enter
+cf-newsletter-tracker`), then open **Settings → Subscribe → Public signup**, enter
 the site key and enable **Turnstile bot protection**.
 
 ## Subscriber CSV import

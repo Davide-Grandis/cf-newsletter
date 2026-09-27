@@ -1,0 +1,59 @@
+name: Product release
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing reviewed product tag (vX.Y.Z)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix web
+      - run: npm run typecheck
+      - run: npm run test:release
+  publish:
+    if: github.event_name == 'workflow_dispatch'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: git merge-base --is-ancestor HEAD origin/main
+      - run: npm ci
+      - run: npm ci --prefix web
+      - run: npm run typecheck
+      - run: npm run test:release
+      - run: npm run build:release
+      - name: Publish exact tagged artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          VERSION="${TAG#v}"
+          if [[ "$VERSION" == *-* ]]; then
+            gh release create "$TAG" "dist/release/cf-newsletter-$VERSION.json" --verify-tag --generate-notes --prerelease
+          else
+            gh release create "$TAG" "dist/release/cf-newsletter-$VERSION.json" --verify-tag --generate-notes
+          fi

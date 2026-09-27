@@ -193,7 +193,7 @@ const TABS: Tab[] = [
   {
     title: 'Public signup',
     description:
-      'Cloudflare Turnstile protects the public subscribe page (enabled per newsletter on its Signup tab) from bots. It starts disabled. Create a Turnstile widget for the tracking domain, set the tracker secret (wrangler secret put TURNSTILE_SECRET_KEY --name newsletter-tracker), paste the site key here, then enable protection.',
+      'Cloudflare Turnstile protects the public subscribe page (enabled per newsletter on its Signup tab) from bots. It starts disabled. Create a Turnstile widget for the tracking domain, set the tracker secret (wrangler secret put TURNSTILE_SECRET_KEY --name cf-newsletter-tracker), paste the site key here, then enable protection.',
     fields: [
       { key: 'TURNSTILE_ENABLED', label: 'Turnstile bot protection', help: 'When on, the public signup form requires a Turnstile challenge. When off, the form is available without bot protection (site key and secret are not required).', type: 'boolean', hideKey: true, hideOverride: true },
       { key: 'TURNSTILE_SITE_KEY', label: 'Turnstile site key', help: 'Public site key of the Turnstile widget. The secret key is a tracker-worker secret, not a setting.', hideKey: true, hideSource: true, enabledBy: 'TURNSTILE_ENABLED' },

@@ -15,7 +15,7 @@ configuration knob involved.
 | **Inline attachment** | An attachment with `Content-Disposition: inline` — typically an image embedded directly in the HTML body via a `cid:` `<img src>` reference. |
 | **Regular (outer) attachment** | An attachment with `Content-Disposition: attachment` — shown as a downloadable file by the mail client. |
 | **Link mode** | When total attachment bytes exceed `ATTACHMENT_LINK_THRESHOLD_BYTES`, regular attachments are served as signed download links rather than being embedded in every copy of the email. |
-| **R2** | Cloudflare R2 object storage. All attachment bytes (and the original raw `.eml`) are stored here in the `newsletter-archive` bucket. |
+| **R2** | Cloudflare R2 object storage. All attachment bytes (and the original raw `.eml`) are stored here in the `cf-newsletter-archive` bucket. |
 | **D1** | Cloudflare D1 SQLite database. Metadata (filename, MIME type, size, SHA-256, R2 key) is stored in the `attachments` table. |
 | **SHA-256** | The hexadecimal SHA-256 hash of an attachment's bytes, used to deduplicate identical files within the same campaign. |
 | **MIME type** | The file type declaration embedded in the email part (`Content-Type` header), e.g. `application/pdf`, `image/jpeg`. |

@@ -97,7 +97,7 @@ export const SETTINGS_DEFAULTS: Record<SettingKey, string> = {
   // No built-in default: the Email Routing zone is deployment-specific and is
   // configured exclusively via the D1 `settings` table (Settings page).
   EMAIL_ROUTING_ZONE_ID: '',
-  INGEST_WORKER_NAME: 'newsletter-ingest',
+  INGEST_WORKER_NAME: 'cf-newsletter-ingest',
   // No built-in default: the sending domain is deployment-specific and lives
   // only in the D1 `settings` table. Saving it auto-resolves EMAIL_ROUTING_ZONE_ID.
   BASE_DOMAIN: '',

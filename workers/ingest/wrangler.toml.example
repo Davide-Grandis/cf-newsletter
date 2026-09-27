@@ -1,4 +1,5 @@
-name = "newsletter-ingest"
+name = "cf-newsletter-ingest"
+account_id = "REPLACE_WITH_ACCOUNT_ID"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
@@ -9,16 +10,16 @@ compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "newsletter_db"
+database_name = "cf-newsletter-db"
 database_id = "REPLACE_WITH_D1_ID"
 
 [[r2_buckets]]
 binding = "ARCHIVE"
-bucket_name = "newsletter-archive"
+bucket_name = "cf-newsletter-archive"
 
 [[queues.producers]]
 binding = "QUEUE"
-queue = "newsletter-queue"
+queue = "cf-newsletter-queue"
 
 # Configure an Email Routing rule to route this worker the newsletter inbound
-# address, e.g. newsletter@yourdomain.com -> Worker `newsletter-ingest`.
+# address, e.g. newsletter@yourdomain.com -> Worker `cf-newsletter-ingest`.

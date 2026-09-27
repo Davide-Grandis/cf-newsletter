@@ -136,7 +136,7 @@ the most machinery. It is **opt-in per newsletter** and **off by default**.
     `send_email` binding to deliver the confirmation).
   - Turnstile starts disabled. Recommended: create a **Cloudflare Turnstile**
     widget for the tracking domain, set the matching tracker-worker secret with
-    `wrangler secret put TURNSTILE_SECRET_KEY --name newsletter-tracker`, then
+    `wrangler secret put TURNSTILE_SECRET_KEY --name cf-newsletter-tracker`, then
     open **Settings → Subscribe → Public signup**, enter the site key and enable
     **Turnstile bot protection**.
 

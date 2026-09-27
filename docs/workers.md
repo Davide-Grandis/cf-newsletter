@@ -193,7 +193,7 @@ A recipient-level error (one bad address, one quota error) is logged to
 `sends` and **does not** cause a queue retry — otherwise the other 99
 recipients in the batch would be re-sent. Only a setup-level failure
 (can't load campaign, can't reach D1, size guard tripped) causes
-`msg.retry()`. After `max_retries: 3`, the batch flows to `newsletter-dlq`
+`msg.retry()`. After `max_retries: 3`, the batch flows to `cf-newsletter-dlq`
 for manual replay.
 
 ### Why these decisions
@@ -441,8 +441,8 @@ display the signed-in user's name.
 
 ### Extension points
 
-- DLQ replay endpoint that drains `newsletter-dlq` and re-enqueues to
-  `newsletter-queue`.
+- DLQ replay endpoint that drains `cf-newsletter-dlq` and re-enqueues to
+  `cf-newsletter-queue`.
 - Per-subscriber send history (`SELECT * FROM sends WHERE subscriber_id =
   ?`).
 - Resend-failed: `INSERT INTO queue ... WHERE campaign_id=? AND status='failed'`.

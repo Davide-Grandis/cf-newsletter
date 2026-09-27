@@ -1,4 +1,4 @@
-# Newsletter Console
+# cf-newsletter Console
 
 ## Users & Authentication
 
