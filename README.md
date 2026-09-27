@@ -65,7 +65,9 @@ the selected domain if necessary, and wait for DNS/DKIM to become active.
 ### Updates
 
 To install a newer release, open the same hosted installer and follow the
-on-screen instructions. Existing data and configuration are preserved.
+on-screen instructions. Existing `cf-newsletter-*` deployments keep their data
+and Worker secrets. Back up and manually migrate legacy `newsletter-*` resources
+before updating; preflight blocks legacy-only and incomplete installations.
 
 Product releases are tagged `vX.Y.Z` and include a verified, prebuilt
 `cf-newsletter-X.Y.Z.json` asset containing all six Workers, the admin SPA,
