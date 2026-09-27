@@ -1,0 +1,19 @@
+README.md
+  s_8ad5626e3a6c69::t_c8e02cda73ecdc 39,43-45,47-53,59,70-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a3a8baef6b61560ad427ffa6600520e6ad6823a4",
+  "prompts": {},
+  "sessions": {
+    "s_8ad5626e3a6c69": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_8ad5626e3a6c69",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
