@@ -3,15 +3,15 @@ account_id = "REPLACE_WITH_ACCOUNT_ID"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 
-[[rules]]
-type = "Text"
-globs = ["**/*.md"]
-fallthrough = true
-
 # The admin GUI is served on a custom hostname that is fronted by a
 # Cloudflare Access application. Do NOT pre-create a DNS record for this
 # hostname; the route below creates it automatically on first deploy.
 routes = [{ pattern = "console.yourdomain.com", custom_domain = true }]
+
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
 
 # Tunables (sending identity, warmup config, Email Routing zone/worker, base
 # domain, etc.) are NOT declared as vars here. They resolve from the D1
