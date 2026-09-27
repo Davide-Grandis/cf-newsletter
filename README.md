@@ -36,21 +36,27 @@ Before running the browser-based installer, the target Cloudflare account must h
 - Email Sending and Email Routing available for the zone;
 - Zero Trust Access available.
 
-The installer asks for a short-lived API token with these permissions:
+The installer asks for a short-lived installation API token with these permissions:
 
 - **Account:** Workers Scripts Edit, D1 Edit, Queues Edit, Workers R2
   Storage Edit, Access Organizations/Identity Providers/Groups Edit, Access
-  Apps and Policies Edit, Zero Trust Edit and Email Sending Read;
-- **Zone:** Zone Read, Zone Settings Edit, Workers Routes Edit, Email Routing
-  Rules Edit and Analytics Read.
+  Apps and Policies Edit and Zero Trust Edit;
+- **Zone:** Zone Read and Workers Routes Edit; fresh installations also need
+  Zone Settings Edit and Email Routing Rules Edit.
 
-Restrict the token to the target account and zone, and revoke it after use.
+A separate runtime automation token is required for ongoing newsletter operations:
+
+- **Account:** Email Sending Read, Workers Scripts Read and Zero Trust Edit;
+- **Zone:** Zone Read, Email Routing Rules Edit and Analytics Read.
+
+Restrict both tokens to the target account and zone. Revoke the short-lived
+installation token after use; the runtime token must remain active.
 
 Note: no GitHub account or repository is required.
 
 ### Installer
 
-<a href="https://cf-newsletter-installer.davideslab.eu/"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy cf-newsletter to Cloudflare"></a>
+<a href="https://installer.cf-newsletter.com/"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy cf-newsletter to Cloudflare"></a>
 
 Enter the target account ID, domain and Cloudflare administrator email, then
 follow the on-screen instructions.
@@ -61,7 +67,9 @@ the selected domain if necessary, and wait for DNS/DKIM to become active.
 ### Updates
 
 To install a newer release, open the same hosted installer and follow the
-on-screen instructions. Existing data and configuration are preserved.
+on-screen instructions. Existing `cf-newsletter-*` deployments keep their data
+and Worker secrets. Back up and manually migrate legacy `newsletter-*` resources
+before updating; preflight blocks legacy-only and incomplete installations.
 
 ## Documentation
 
