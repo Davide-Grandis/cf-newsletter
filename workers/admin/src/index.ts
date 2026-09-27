@@ -41,6 +41,7 @@ export interface Env {
   ARCHIVE: R2Bucket;
   APP_VERSION?: string;
   APP_COMMIT?: string;
+  APP_RELEASED_AT?: string;
   // Warmup settings — kept in sync with the consumer worker so the admin GUI
   // can show the weekly schedule and current progression.
   WARMUP_SCHEDULE?: string;
@@ -120,6 +121,9 @@ export default {
         }
       }
       const cfg = await loadSettings(env.DB, env);
+      const deployment = await env.DB.prepare("SELECT key, value FROM deployment_metadata WHERE key IN ('product_version', 'product_commit', 'product_installed_at')")
+        .all<{ key: string; value: string }>();
+      const metadata = new Map((deployment.results ?? []).map(({ key, value }) => [key, value]));
       // Startup self-heal: silently reconcile the Access login list with the
       // admins table (D1 authoritative) on every sign-in. Runs in the
       // background so it never delays the response, and is best-effort — any
@@ -161,6 +165,9 @@ export default {
         access_configured: Boolean(cfg.ACCESS_ACCOUNT_ID && cfg.ACCESS_LIST_ID),
         app_version: env.APP_VERSION ?? null,
         app_commit: env.APP_COMMIT ?? null,
+        app_released_at: env.APP_RELEASED_AT ?? null,
+        app_installed_at: env.APP_VERSION && env.APP_COMMIT && metadata.get('product_version') === env.APP_VERSION && metadata.get('product_commit') === env.APP_COMMIT
+          ? metadata.get('product_installed_at') ?? null : null,
       });
     }
 

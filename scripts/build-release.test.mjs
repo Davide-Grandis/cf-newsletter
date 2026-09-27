@@ -29,3 +29,15 @@ test('release includes all six Workers, the SPA, schema and migrations with corr
     assert.equal(artifact.manifest.checksums[`db/updates/${migration.file}`], hash(migration.sql));
   }
 });
+
+test('admin release exposes the version, publication date and installed-at fields', () => {
+  const admin = artifact.workers.admin;
+  const client = Object.entries(artifact.assets)
+    .filter(([path]) => path.endsWith('.js'))
+    .map(([, asset]) => Buffer.from(asset.base64, 'base64').toString('utf8'))
+    .join('\n');
+  assert.match(admin, /app_released_at/);
+  assert.match(admin, /app_installed_at/);
+  assert.match(client, /Release date:/);
+  assert.match(client, /Installed at:/);
+});

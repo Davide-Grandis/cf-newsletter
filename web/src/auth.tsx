@@ -38,6 +38,8 @@ export interface Identity {
   access_configured: boolean;
   app_version: string | null;
   app_commit: string | null;
+  app_released_at: string | null;
+  app_installed_at: string | null;
 }
 
 export function useIdentity() {

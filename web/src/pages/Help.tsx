@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { api, ApiError, Help as HelpDoc } from '../api';
+import { useIdentity } from '../auth';
 
 interface HelpSection {
   title: string;
@@ -145,6 +146,7 @@ function TabButton({
 }
 
 function AboutCard() {
+  const { data: identity } = useIdentity();
   return (
     <div className="border border-slate-200 rounded-lg dark:border-slate-700 overflow-hidden">
       <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 dark:bg-slate-800/60 dark:border-slate-700">
@@ -174,7 +176,10 @@ function AboutCard() {
         </div>
       </div>
       <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-        <span>v2.0 (June 20, 2026)</span>
+        <span>cf-newsletter rel. {identity?.app_version ?? 'unavailable'}</span>
+        {identity?.app_released_at && <span>Release date: {new Date(identity.app_released_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })} (UTC)</span>}
+        {identity?.app_installed_at && <span>Installed at: {new Date(identity.app_installed_at).toLocaleString()}</span>}
+        {identity?.app_commit && <span title={identity.app_commit}>Commit {identity.app_commit.slice(0, 12)}</span>}
       </div>
     </div>
   );

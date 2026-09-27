@@ -197,7 +197,7 @@ function Footer({ version, commit }: { version: string | null; commit: string | 
           on Cloudflare Workers
         </span>
         <span className="ml-3" title={commit ?? undefined}>
-          cf-newsletter {version ?? import.meta.env.VITE_PRODUCT_VERSION}
+          cf-newsletter rel. {version ?? import.meta.env.VITE_PRODUCT_VERSION}
           {version && version !== import.meta.env.VITE_PRODUCT_VERSION ? ' (UI version differs)' : ''}
         </span>
       </div>
