@@ -1,0 +1,47 @@
+package-lock.json
+  s_89c82b55b5016e::t_52828bffc07f98 3,9
+package.json
+  s_89c82b55b5016e::t_50f3b831114b06 4
+web/package-lock.json
+  s_89c82b55b5016e::t_d7ab7d439c24b6 3,9
+web/package.json
+  s_89c82b55b5016e::t_8fd4185d85cc3e 4
+docs/help.md
+  s_b70ef5365b5749::t_b05aea7e01a5dd 49,53-54,61-65,116-119,151-153
+docs/subscribe-unsubscribe.md
+  s_b70ef5365b5749::t_799af7bc6c4d97 132,137-141,154-156,158-159,167-170
+docs/tracking.md
+  s_b70ef5365b5749::t_342f3ded0de0d8 216
+shared/settings.ts
+  s_b70ef5365b5749::t_0a9f72c329443e 125-128
+web/src/App.tsx
+  s_b70ef5365b5749::t_4a924ad68b3810 200-201
+web/src/pages/Settings.tsx
+  s_b70ef5365b5749::t_f52901531fc330 196
+workers/tracker/src/index.ts
+  s_b70ef5365b5749::t_b1a29c76934a19 102,121,197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d58c2bc946a81c46eaab5d4f3a72082690160003",
+  "prompts": {},
+  "sessions": {
+    "s_89c82b55b5016e": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "elemental-plaster",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_b70ef5365b5749": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_b70ef5365b5749",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

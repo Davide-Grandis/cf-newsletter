@@ -1,0 +1,19 @@
+README.md
+  s_6a615bf04ce149::t_1b9fb7670226b2 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0007fd4fad52d79d10ada96d519c16d9c8d18e2e",
+  "prompts": {},
+  "sessions": {
+    "s_6a615bf04ce149": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_6a615bf04ce149",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+README.md
+  s_67c7b744b55de6::t_c994ea51bf42ed 36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6a30d2606ee0f2c7777f0398b9f03b2cd9456ccc",
+  "prompts": {},
+  "sessions": {
+    "s_67c7b744b55de6": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_67c7b744b55de6",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

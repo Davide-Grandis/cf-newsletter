@@ -1,0 +1,19 @@
+package.json
+  s_0ea8cb7d869805::t_dd8e6d22c71cee 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f97629c08d3b8a271c54d102ed300e7b4b4999d7",
+  "prompts": {},
+  "sessions": {
+    "s_0ea8cb7d869805": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_0ea8cb7d869805",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

@@ -1,0 +1,49 @@
+db/schema.sql
+  s_89c82b55b5016e::t_f5de8acbad1141 238-248
+db/updates/0001_block_bounce_count.sql
+  s_89c82b55b5016e::t_09c4e6901acf66 1
+db/updates/manifest.json
+  s_89c82b55b5016e::t_73e622a05ec146 1-8
+package-lock.json
+  s_89c82b55b5016e::t_99a22f1a1d4d73 3,9
+package.json
+  s_89c82b55b5016e::t_f3b618c901db8e 4
+scripts/build-installer.mjs
+  s_89c82b55b5016e::t_216f65fee23e67 10-16,76-77
+scripts/install.mjs
+  s_89c82b55b5016e::t_b1b4c759f68f44 13,378
+web/package-lock.json
+  s_89c82b55b5016e::t_ebb7d37e907569 3,9
+web/package.json
+  s_89c82b55b5016e::t_e10f0d747f5353 4
+workers/admin/src/index.ts
+  s_89c82b55b5016e::t_4872015162fdc2 42,161
+workers/installer/src/index.ts
+  s_89c82b55b5016e::t_cd77eba8354e1b 1-7,25-26,33,35,37-38,71-79,82,86-125,163-166,169-174,176,184,186,190,213,219-221,258,265-271,282,284-287,294-295,297-298,309,311
+README.md
+  s_343b6bface1cec::t_40f6b6317fdc98 188-225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1a2d8a1c6fc4c18db6003f0211805f442d000130",
+  "prompts": {},
+  "sessions": {
+    "s_343b6bface1cec": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_343b6bface1cec",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_89c82b55b5016e": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "elemental-plaster",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

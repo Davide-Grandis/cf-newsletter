@@ -1,0 +1,19 @@
+README.md
+  s_89c82b55b5016e::t_710576db00f93e 188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d60b5951a9b46ce9643695403c4b44f7894da947",
+  "prompts": {},
+  "sessions": {
+    "s_89c82b55b5016e": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "elemental-plaster",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

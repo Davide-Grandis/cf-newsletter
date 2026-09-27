@@ -1,0 +1,19 @@
+README.md
+  s_2a9cfd361d553a::t_e26e48b12098f1 190-203,208-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d07154f027fff29e6292d9fb4a7c588f2356c4ce",
+  "prompts": {},
+  "sessions": {
+    "s_2a9cfd361d553a": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_2a9cfd361d553a",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

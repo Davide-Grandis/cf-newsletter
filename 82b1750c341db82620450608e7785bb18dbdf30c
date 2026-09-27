@@ -1,0 +1,19 @@
+workers/installer/src/index.ts
+  s_2756ec1e787bc1::t_57d76cc378ff96 34-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "82b1750c341db82620450608e7785bb18dbdf30c",
+  "prompts": {},
+  "sessions": {
+    "s_2756ec1e787bc1": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_2756ec1e787bc1",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

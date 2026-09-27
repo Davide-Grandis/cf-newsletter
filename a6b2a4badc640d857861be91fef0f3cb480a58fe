@@ -1,0 +1,33 @@
+package-lock.json
+  s_89c82b55b5016e::t_c0391998f214cd 15,131-137
+README.md
+  s_d025d4db69a5fe::t_ac05e621daff88 203-208
+package.json
+  s_d025d4db69a5fe::t_bec7ef6283001c 8-9,19
+tsconfig.json
+  s_d025d4db69a5fe::t_d3a66910393411 7,16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a6b2a4badc640d857861be91fef0f3cb480a58fe",
+  "prompts": {},
+  "sessions": {
+    "s_89c82b55b5016e": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "elemental-plaster",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_d025d4db69a5fe": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_d025d4db69a5fe",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

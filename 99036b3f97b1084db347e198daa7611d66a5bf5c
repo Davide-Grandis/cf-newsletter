@@ -1,0 +1,65 @@
+.gitignore
+  s_89c82b55b5016e::t_2520ed19881906 9
+README.md
+  s_89c82b55b5016e::t_9fc2a6d6a72b96 112-114,118,165-211,214-215,220
+package-lock.json
+  s_89c82b55b5016e::t_f372cac3c02156 10,15,17,47-49,64-66,81-83,98-100,115-117,145-147,156-158,173-175,190-192,207-209,224-226,241-243,258-260,275-277,292-294,309-311,326-328,343-345,360-362,377-379,394-396,411-413,428-430,445-447,462-464,479-481,496-498,513-515,530-532,547-549,564-566,581-583,608-610,621,627,631-633,644,650-670,674-676,691-693,708-710,728-730,748-750,768-770,788-790,808-810,828-830,848-850,868-870,884,890,894-896,910,916,920-922,936,942,946-948,962,968,972-974,988,994,998-1000,1014,1020,1024-1026,1040,1046,1050-1052,1066,1072,1076-1095,1100,1103,1106,1113-1115,1126,1133-1135,1146,1153-1155,1166,1183-1185,1243-1245,1291-1293,1304-1329,1358-1360,1365-1367,1409-1411,1415,1417,1420,1426-1455,1494-1496,1514-1516,1527-1531,1535-1537,1545,1548,1562,1570-2053
+worker-configuration.d.ts
+  s_89c82b55b5016e::t_112ad739f7354b 1-15387
+workers/installer/src/index.ts
+  s_89c82b55b5016e::t_689801cdf89503 1-273
+LICENSE
+  s_dc4d077e38ac48::t_1ce306ab2bd26b 1-21
+db/migrate_block_bounce_count.sql
+  s_dc4d077e38ac48::t_6790ff7cbaa749 1-5
+db/schema.sql
+  s_dc4d077e38ac48::t_be2f3e4e94a961 57-64
+docs/help.md
+  s_dc4d077e38ac48::t_569a519160eeb2 197-208,212-231,233-267,279-280,284-285,289-293,295
+package.json
+  s_dc4d077e38ac48::t_9344812dbb8327 5,8-13,21,23
+scripts/build-installer.mjs
+  s_dc4d077e38ac48::t_adcec9235b2dce 1-73
+scripts/install.mjs
+  s_dc4d077e38ac48::t_532172c0d99c54 1-440
+shared/markdown.d.ts
+  s_dc4d077e38ac48::t_de97c42645b195 1-4
+tsconfig.json
+  s_dc4d077e38ac48::t_d9b0883a76e774 15
+web/src/pages/Help.tsx
+  s_dc4d077e38ac48::t_f457e5888a2dcb 67,189
+web/src/pages/Logs.tsx
+  s_dc4d077e38ac48::t_c4d70d9e27eba2 18,157
+workers/admin/src/index.ts
+  s_dc4d077e38ac48::t_64b475b116ab1b 15,2212-2216
+workers/admin/wrangler.toml.example
+  s_dc4d077e38ac48::t_a389064e23f31d 5-9
+workers/bounce/src/index.ts
+  s_dc4d077e38ac48::t_0cf9d83e9fca83 257-271,274,283-285,289
+wrangler.jsonc
+  s_dc4d077e38ac48::t_4a07e4c2147c38 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "99036b3f97b1084db347e198daa7611d66a5bf5c",
+  "prompts": {},
+  "sessions": {
+    "s_89c82b55b5016e": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "elemental-plaster",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_dc4d077e38ac48": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_dc4d077e38ac48",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

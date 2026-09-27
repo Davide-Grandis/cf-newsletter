@@ -1,0 +1,25 @@
+README.md
+  s_5977c9d40ade34::t_5a69101748a69f 190,200
+package.json
+  s_5977c9d40ade34::t_246920f2d875df 10
+workers/installer/src/index.ts
+  s_5977c9d40ade34::t_c3493b6a03b963 239
+wrangler.jsonc
+  s_5977c9d40ade34::t_698c42719d87c4 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "555125dc09637a1a21f884b64104d53978ad1864",
+  "prompts": {},
+  "sessions": {
+    "s_5977c9d40ade34": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_5977c9d40ade34",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

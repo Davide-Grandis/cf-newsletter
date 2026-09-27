@@ -1,0 +1,19 @@
+README.md
+  s_b29bf1911080ed::t_1a9204fe9d2640 12-74,77-80,85,89-96,150,157-159,212-213,215,217-221,223-225,235,274,294,298,303,362,391,393-396,398,414,460-462
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "09d7a29db668cae32d91eb7a1a719fd951827b75",
+  "prompts": {},
+  "sessions": {
+    "s_b29bf1911080ed": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_b29bf1911080ed",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

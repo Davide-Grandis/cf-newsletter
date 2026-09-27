@@ -1,0 +1,21 @@
+README.md
+  s_807c5092a8c8b5::t_30571a34669e54 3-26,48,56-57,59-60,64-65,67,69-75,77
+architecture.md
+  s_807c5092a8c8b5::t_7c77638a4d3d4b 1-324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bc1e9107dfceec28fc55468638228c00f8de9eb5",
+  "prompts": {},
+  "sessions": {
+    "s_807c5092a8c8b5": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_807c5092a8c8b5",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

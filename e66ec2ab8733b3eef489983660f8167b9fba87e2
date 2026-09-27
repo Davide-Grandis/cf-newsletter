@@ -1,0 +1,21 @@
+README.md
+  s_df999004bf22e3::t_09805f9cf21e4d 163-167,173-174
+web/src/App.tsx
+  s_df999004bf22e3::t_be8bf04d237ce0 127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e66ec2ab8733b3eef489983660f8167b9fba87e2",
+  "prompts": {},
+  "sessions": {
+    "s_df999004bf22e3": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_df999004bf22e3",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
