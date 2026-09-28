@@ -124,11 +124,7 @@ export default function Newsletters() {
           Each newsletter is an independent mailing list with its own inbound address, authors and
           subscribers.
           {me.data?.role === 'super_admin' && (
-            <><br />
-          Creating, renaming, enabling/disabling or deleting a newsletter automatically synchronizes
-          the matching Cloudflare Email Routing rule, including disabling the rule when disabling a
-          newsletter here. In cases of conflicts the settings below here win.
-            <br /><br />Note: this page displays up to 1,000 newsletters.</>
+            <><br />Note: this page displays up to 1,000 newsletters.</>
           )}
         </p>
       </div>
