@@ -1,0 +1,29 @@
+workers/admin/src/index.ts
+  s_0ae62d5af93425::t_744319c3f9b0e2 949-960,963,967-972,979,981,983-995,998-999,1003-1005
+web/src/pages/Newsletters.tsx
+  s_963292c1f4c930::t_d70b872aa41187 1,10-16,25,31-37,39-49,51,66,124,190-194,221,248,256-258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d88fcf5072fe7ec9774442896c6f4f5743e3d266",
+  "prompts": {},
+  "sessions": {
+    "s_0ae62d5af93425": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "perfect-drum",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_963292c1f4c930": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_963292c1f4c930",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
