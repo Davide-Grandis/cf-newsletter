@@ -194,9 +194,10 @@ function Footer({ version, commit }: { version: string | null; commit: string | 
         <span className="flex items-center gap-1">
           Built with
           <HeartIcon />
-          on Cloudflare Workers
+          on Cloudflare
         </span>
-        <span className="ml-3" title={commit ?? undefined}>
+        <span className="mx-2" aria-hidden="true">·</span>
+        <span title={commit ?? undefined}>
           cf-newsletter rel. {version ?? import.meta.env.VITE_PRODUCT_VERSION}
           {version && version !== import.meta.env.VITE_PRODUCT_VERSION ? ' (UI version differs)' : ''}
         </span>
@@ -319,8 +320,8 @@ function HeartIcon() {
       width="14"
       height="14"
       viewBox="0 0 24 24"
-      fill="#ef4444"
-      stroke="#ef4444"
+      fill="#f6821f"
+      stroke="#f6821f"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
