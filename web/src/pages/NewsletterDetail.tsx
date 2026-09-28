@@ -47,8 +47,8 @@ export default function NewsletterDetail() {
   const patch = useMutation({
     mutationFn: (
       body: Partial<
-        Pick<Newsletter, 'name' | 'inbound_address' | 'from_address' | 'footer_html' | 'footer_text' | 'slug'>
-      > & { enabled?: boolean; allow_public_signup?: boolean },
+        Pick<Newsletter, 'name' | 'inbound_address' | 'from_address' | 'reply_to_address' | 'footer_html' | 'footer_text' | 'slug'>
+      > & { enabled?: boolean; allow_public_signup?: boolean; reply_to_author?: boolean },
     ) => api<{ routing_warning?: string }>(`/api/newsletters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: (res) => {
       setWarn(res.routing_warning ?? null);
@@ -56,7 +56,13 @@ export default function NewsletterDetail() {
       qc.invalidateQueries({ queryKey: ['newsletters'] });
     },
   });
-  const saveSettings = (body: { name?: string; inbound_address?: string; from_address?: string | null }) =>
+  const saveSettings = (body: {
+    name?: string;
+    inbound_address?: string;
+    from_address?: string | null;
+    reply_to_address?: string | null;
+    reply_to_author?: boolean;
+  }) =>
     patch.mutateAsync(body);
   const saveFooter = (body: { footer_html?: string | null; footer_text?: string | null }) =>
     patch.mutateAsync(body);
@@ -94,6 +100,7 @@ export default function NewsletterDetail() {
         n={n}
         domain={domain}
         defaultSenderLocal={defaultSenderLocal}
+        defaultSenderAddress={me.data?.from_address ?? ''}
         canEdit={canEdit}
         canDelete={canDelete}
         onSave={saveSettings}
@@ -187,6 +194,7 @@ function Settings({
   n,
   domain,
   defaultSenderLocal,
+  defaultSenderAddress,
   canEdit,
   canDelete,
   onSave,
@@ -196,9 +204,16 @@ function Settings({
   n: Newsletter;
   domain: string;
   defaultSenderLocal: string;
+  defaultSenderAddress: string;
   canEdit: boolean;
   canDelete: boolean;
-  onSave: (body: { name?: string; inbound_address?: string; from_address?: string | null }) => Promise<unknown>;
+  onSave: (body: {
+    name?: string;
+    inbound_address?: string;
+    from_address?: string | null;
+    reply_to_address?: string | null;
+    reply_to_author?: boolean;
+  }) => Promise<unknown>;
   saving: boolean;
   onDelete: () => void;
 }) {
@@ -208,19 +223,25 @@ function Settings({
   const [name, setName] = useState(n.name);
   const [inbound, setInbound] = useState(localPart(n.inbound_address));
   const [sender, setSender] = useState(localPart(n.from_address ?? ''));
+  const [replyToAddress, setReplyToAddress] = useState(n.reply_to_address ?? '');
+  const [replyToAuthor, setReplyToAuthor] = useState(n.reply_to_author === 1);
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
     setName(n.name);
     setInbound(localPart(n.inbound_address));
     setSender(localPart(n.from_address ?? ''));
+    setReplyToAddress(n.reply_to_address ?? '');
+    setReplyToAuthor(n.reply_to_author === 1);
     setError(null);
   }
 
   const dirty =
     name.trim() !== n.name ||
     inbound.trim() !== localPart(n.inbound_address) ||
-    sender.trim() !== localPart(n.from_address ?? '');
+    sender.trim() !== localPart(n.from_address ?? '') ||
+    replyToAddress.trim() !== (n.reply_to_address ?? '') ||
+    replyToAuthor !== (n.reply_to_author === 1);
 
   async function save() {
     if (!dirty) {
@@ -234,6 +255,8 @@ function Settings({
         inbound_address: `${inbound.trim()}@${domain}`,
         // Empty string clears the override (falls back to the global sender).
         from_address: sender.trim() ? `${sender.trim()}@${domain}` : '',
+        reply_to_address: replyToAddress.trim(),
+        reply_to_author: replyToAuthor,
       });
       setEditing(false);
     } catch (e) {
@@ -269,6 +292,28 @@ function Settings({
             placeholder={defaultSenderLocal || 'default'}
           />
         </div>
+        <div className="flex-1 min-w-[220px]">
+          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+          </label>
+          <input
+            type="email"
+            value={replyToAddress}
+            disabled={!editing || replyToAuthor}
+            onChange={(e) => setReplyToAddress(e.target.value)}
+            placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
+            className={inputCls}
+          />
+        </div>
+        <label className="flex items-center gap-2 py-1 text-sm text-slate-600 dark:text-slate-300">
+          <input
+            type="checkbox"
+            checked={replyToAuthor}
+            disabled={!editing}
+            onChange={(e) => setReplyToAuthor(e.target.checked)}
+          />
+          Use campaign author’s email address for replies
+        </label>
         {editing ? (
           <>
             <button
@@ -317,8 +362,10 @@ function Settings({
       </div>
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-        Inbound mail to <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{n.inbound_address}</code> is routed to the ingest worker automatically via an Email Routing rule.
-        The <strong>Sender</strong> is the outgoing <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">From:</code> for this newsletter; leave empty to use the global default.
+        Authors can send an email to <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{n.inbound_address}</code> to start a campaign. The sender email address of the campaign is <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{n.from_address || defaultSenderAddress || 'the global default'}</code>, leave it empty for the default value.
+      </p>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+        Replies go to the Reply-To address above. When the campaign author option is selected, replies go to the author who sent that campaign; otherwise, a blank Reply-To falls back to From.
       </p>
     </section>
   );

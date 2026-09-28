@@ -15,6 +15,7 @@ export interface BuildEmailInput {
   to: string;
   subject: string;
   messageId: string;
+  replyTo?: string;
   text: string;
   html: string;
   headers?: Record<string, string>;
@@ -88,6 +89,7 @@ export function buildEmail(input: BuildEmailInput): string {
 
   const lines: string[] = [];
   lines.push(`From: ${input.from}`);
+  if (input.replyTo) lines.push(`Reply-To: ${input.replyTo}`);
   lines.push(`To: ${input.to}`);
   lines.push(`Subject: ${encodeHeader(input.subject)}`);
   lines.push(`Message-ID: <${input.messageId}>`);

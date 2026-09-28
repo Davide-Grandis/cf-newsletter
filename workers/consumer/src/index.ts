@@ -234,6 +234,7 @@ export default {
               to: r.name ? `${quoteName(r.name)} <${r.email}>` : r.email,
               subject: campaign.subject,
               messageId,
+              replyTo: campaign.reply_to_address ?? undefined,
               text,
               html,
               attachments: parts,

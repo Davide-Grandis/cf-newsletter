@@ -17,7 +17,7 @@ export async function getCampaign(db: D1Database, id: string): Promise<CampaignR
       'SELECT c.id, c.subject, c.html, c.text, c.sent_by, c.status, c.link_mode, ' +
         'c.newsletter_id AS newsletter_id, ' +
         'n.from_address AS from_address, n.name AS newsletter_name, ' +
-        'n.footer_html AS footer_html, n.footer_text AS footer_text ' +
+        'c.reply_to_address AS reply_to_address, n.footer_html AS footer_html, n.footer_text AS footer_text ' +
         'FROM campaigns c LEFT JOIN newsletters n ON n.id = c.newsletter_id WHERE c.id = ?',
     )
     .bind(id)

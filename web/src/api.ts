@@ -63,6 +63,8 @@ export interface Newsletter {
   inbound_address: string;
   // Optional per-newsletter sender. null => falls back to global FROM_ADDRESS.
   from_address: string | null;
+  reply_to_address?: string | null;
+  reply_to_author?: 0 | 1;
   // Optional per-newsletter footer. null/empty => inherits the global
   // DEFAULT_FOOTER_HTML / DEFAULT_FOOTER_TEXT settings. Only returned by the
   // single-newsletter GET (not the list).

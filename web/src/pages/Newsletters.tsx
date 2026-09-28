@@ -26,6 +26,7 @@ export default function Newsletters() {
 
   const [inboundLocal, setInboundLocal] = useState('');
   const [senderLocal, setSenderLocal] = useState('');
+  const [replyToAuthor, setReplyToAuthor] = useState(false);
 
   const [page, setPage] = useState(0);
   useEffect(() => {
@@ -68,7 +69,7 @@ export default function Newsletters() {
   }
 
   const create = useMutation({
-    mutationFn: (body: { name: string; inbound_address: string; from_address?: string }) =>
+    mutationFn: (body: { name: string; inbound_address: string; from_address?: string; reply_to_address?: string; reply_to_author: boolean }) =>
       api<{ routing_warning?: string }>('/api/newsletters', { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: (res) => {
       setWarn(res.routing_warning ?? null);
@@ -95,6 +96,8 @@ export default function Newsletters() {
     const name = String(fd.get('name') ?? '').trim();
     const inbound = inboundLocal.trim();
     const sender = senderLocal.trim();
+    const replyTo = String(fd.get('reply_to_address') ?? '').trim();
+    const useAuthorReplyTo = fd.get('reply_to_author') === 'on';
     if (!name || !inbound) return;
     const form = e.currentTarget;
     create.mutate(
@@ -102,12 +105,15 @@ export default function Newsletters() {
         name,
         inbound_address: `${inbound}@${domain}`,
         from_address: sender ? `${sender}@${domain}` : undefined,
+        reply_to_address: replyTo || undefined,
+        reply_to_author: useAuthorReplyTo,
       },
       {
         onSuccess: () => {
           form.reset();
           setInboundLocal('');
           setSenderLocal('');
+          setReplyToAuthor(false);
         },
         onError: (e) => setErr((e as Error).message),
       },
@@ -162,6 +168,27 @@ export default function Newsletters() {
             placeholder={defaultSenderLocal || 'default'}
           />
         </div>
+        <div className="flex-1 min-w-[220px]">
+          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+          </label>
+          <input
+            type="email"
+            name="reply_to_address"
+            disabled={replyToAuthor}
+            placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
+            className={inputCls}
+          />
+        </div>
+        <label className="flex items-center gap-2 py-1 text-sm text-slate-600 dark:text-slate-300">
+          <input
+            type="checkbox"
+            name="reply_to_author"
+            checked={replyToAuthor}
+            onChange={(e) => setReplyToAuthor(e.target.checked)}
+          />
+          Use campaign author’s email for replies
+        </label>
         <button
           type="submit"
           disabled={create.isPending}

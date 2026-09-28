@@ -277,6 +277,17 @@ function validateFromAddress(
   return { value: addr };
 }
 
+function normalizeReplyToAddress(value: unknown): { value: string | null } | { error: string } {
+  if (value === undefined || value === null || value === '') return { value: null };
+  if (typeof value !== 'string') return { error: 'reply_to_address must be a string' };
+  const address = value.trim().toLowerCase();
+  if (!address) return { value: null };
+  if (address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    return { error: 'valid reply_to_address required' };
+  }
+  return { value: address };
+}
+
 // Per-newsletter footer limits. Generous, but bounded so a runaway value can't
 // bloat every outgoing message.
 const FOOTER_HTML_MAX = 20000;
@@ -1010,10 +1021,12 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     // Creating newsletters is a super_admin action unless the global toggle
     // ALLOW_ADMIN_NEWSLETTER_CRUD lets admins do it too.
     if (!allowNlCrud) return forbidden();
-    const { name, inbound_address, from_address, footer_html, footer_text } = await req.json<{
+    const { name, inbound_address, from_address, reply_to_address, reply_to_author, footer_html, footer_text } = await req.json<{
       name?: string;
       inbound_address?: string;
       from_address?: string;
+      reply_to_address?: unknown;
+      reply_to_author?: unknown;
       footer_html?: string | null;
       footer_text?: string | null;
     }>();
@@ -1035,6 +1048,11 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       if ('error' in r) return Response.json({ error: r.error }, { status: 400 });
       from = r.value;
     }
+    const replyTo = normalizeReplyToAddress(reply_to_address);
+    if ('error' in replyTo) return Response.json({ error: replyTo.error }, { status: 400 });
+    if (reply_to_author !== undefined && typeof reply_to_author !== 'boolean') {
+      return Response.json({ error: 'reply_to_author must be a boolean' }, { status: 400 });
+    }
     const fh = normalizeFooterHtml(footer_html);
     if ('error' in fh) return Response.json({ error: fh.error }, { status: 400 });
     const ft = normalizeFooterText(footer_text);
@@ -1046,10 +1064,10 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     try {
       await env.DB
         .prepare(
-          'INSERT INTO newsletters (id, name, inbound_address, from_address, footer_html, footer_text, slug, enabled) ' +
-            'VALUES (?, ?, ?, ?, ?, ?, ?, 1)',
+          'INSERT INTO newsletters (id, name, inbound_address, from_address, reply_to_address, reply_to_author, footer_html, footer_text, slug, enabled) ' +
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
         )
-        .bind(id, nm, addr, from, fh.value, ft.value, slug)
+        .bind(id, nm, addr, from, replyTo.value, reply_to_author === true ? 1 : 0, fh.value, ft.value, slug)
         .run();
     } catch (err) {
       const msg = (err as Error).message;
@@ -1071,7 +1089,16 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         .run();
     }
     const routing_warning = await createRoutingRule(env, addr);
-    return Response.json({ id, name: nm, inbound_address: addr, from_address: from, enabled: 1, routing_warning }, { status: 201 });
+    return Response.json({
+      id,
+      name: nm,
+      inbound_address: addr,
+      from_address: from,
+      reply_to_address: replyTo.value,
+      reply_to_author: reply_to_author === true ? 1 : 0,
+      enabled: 1,
+      routing_warning,
+    }, { status: 201 });
   }
 
   const nl = /^\/api\/newsletters\/([^/]+)(\/.*)?$/.exec(p);
@@ -1204,7 +1231,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       if (m === 'GET') {
         const row = await env.DB
           .prepare(
-            `SELECT n.id, n.name, n.inbound_address, n.from_address, n.footer_html, n.footer_text, n.slug, n.allow_public_signup, n.enabled, n.created_at, ` +
+            `SELECT n.id, n.name, n.inbound_address, n.from_address, n.reply_to_address, n.reply_to_author, n.footer_html, n.footer_text, n.slug, n.allow_public_signup, n.enabled, n.created_at, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id) AS subscriber_count, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id AND s.status='active') AS active_count, ` +
               `(SELECT COUNT(*) FROM authors a WHERE a.newsletter_id = n.id) AS author_count ` +
@@ -1221,6 +1248,8 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           enabled?: boolean;
           inbound_address?: string;
           from_address?: string | null;
+          reply_to_address?: unknown;
+          reply_to_author?: unknown;
           footer_html?: string | null;
           footer_text?: string | null;
           slug?: string;
@@ -1255,6 +1284,19 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           if ('error' in r) return Response.json({ error: r.error }, { status: 400 });
           sets.push('from_address = ?');
           binds.push(r.value);
+        }
+        if ('reply_to_address' in body) {
+          const replyTo = normalizeReplyToAddress(body.reply_to_address);
+          if ('error' in replyTo) return Response.json({ error: replyTo.error }, { status: 400 });
+          sets.push('reply_to_address = ?');
+          binds.push(replyTo.value);
+        }
+        if ('reply_to_author' in body) {
+          if (typeof body.reply_to_author !== 'boolean') {
+            return Response.json({ error: 'reply_to_author must be a boolean' }, { status: 400 });
+          }
+          sets.push('reply_to_author = ?');
+          binds.push(body.reply_to_author ? 1 : 0);
         }
         if (typeof body.inbound_address === 'string') {
           const addr = body.inbound_address.trim().toLowerCase();

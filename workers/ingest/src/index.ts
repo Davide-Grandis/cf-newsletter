@@ -9,7 +9,7 @@ import {
   type AttachmentLimits,
 } from '../../../shared/attachments';
 import { estimateRawSize } from '../../../shared/mime';
-import { iterateActiveSubscribers, writeLog } from '../../../shared/db';
+import { iterateActiveSubscribers, markCampaignCompleteIfDone, writeLog } from '../../../shared/db';
 import { loadSettings } from '../../../shared/settings';
 import type { QueueMessage, Recipient } from '../../../shared/types';
 
@@ -46,9 +46,9 @@ export default {
       detail: { from: sender, to: recipient },
     });
     const newsletter = await env.DB
-      .prepare('SELECT id, enabled FROM newsletters WHERE inbound_address = ? LIMIT 1')
+      .prepare('SELECT id, enabled, reply_to_address, reply_to_author FROM newsletters WHERE inbound_address = ? LIMIT 1')
       .bind(recipient)
-      .first<{ id: string; enabled: number }>();
+      .first<{ id: string; enabled: number; reply_to_address: string | null; reply_to_author: number }>();
     if (!newsletter) {
       await writeLog(env.DB, {
         level: 'warn',
@@ -174,10 +174,21 @@ export default {
     await env.ARCHIVE.put(`campaigns/${campaignId}/raw.eml`, raw);
     await env.DB
       .prepare(
-        'INSERT INTO campaigns (id, newsletter_id, subject, html, text, sent_by, status, attachment_count, attachment_total_bytes, link_mode) ' +
-          "VALUES (?, ?, ?, ?, ?, ?, 'sending', ?, ?, ?)",
+        'INSERT INTO campaigns (id, newsletter_id, subject, html, text, sent_by, reply_to_address, status, attachment_count, attachment_total_bytes, link_mode) ' +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, 'sending', ?, ?, ?)",
       )
-      .bind(campaignId, newsletterId, subject, html, text, from, inputs.length, totalAttBytes, linkMode ? 1 : 0)
+      .bind(
+        campaignId,
+        newsletterId,
+        subject,
+        html,
+        text,
+        from,
+        newsletter.reply_to_author ? from : newsletter.reply_to_address,
+        inputs.length,
+        totalAttBytes,
+        linkMode ? 1 : 0,
+      )
       .run();
     await writeLog(env.DB, {
       source: 'ingest',
@@ -246,9 +257,12 @@ export default {
     await flush();
 
     await env.DB
-      .prepare('UPDATE campaigns SET total_recipients = ? WHERE id = ?')
-      .bind(total, campaignId)
+      .prepare(
+        "UPDATE campaigns SET total_recipients = ?, status = CASE WHEN ? = 0 AND status = 'sending' THEN 'done' ELSE status END WHERE id = ?",
+      )
+      .bind(total, total, campaignId)
       .run();
+    if (total > 0) await markCampaignCompleteIfDone(env.DB, campaignId);
     await writeLog(env.DB, {
       source: 'ingest',
       event: 'ingest.queued',

@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS newsletters (
   -- Optional per-newsletter sender (the outgoing `From:`). NULL falls back to
   -- the global FROM_ADDRESS setting. Must be on the configured sending domain.
   from_address    TEXT,
+  reply_to_address TEXT,
+  reply_to_author INTEGER NOT NULL DEFAULT 0 CHECK (reply_to_author IN (0,1)),
   -- Optional per-newsletter email footer (HTML + plain text). NULL/empty falls
   -- back to the global DEFAULT_FOOTER_HTML / DEFAULT_FOOTER_TEXT settings. May
   -- contain {{unsubscribe_url}}, {{newsletter_name}}, {{email}} tokens; the
@@ -83,6 +85,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   html                    TEXT,
   text                    TEXT,
   sent_by                 TEXT NOT NULL,
+  reply_to_address        TEXT,
   created_at              TEXT NOT NULL DEFAULT (datetime('now')),
   status                  TEXT NOT NULL DEFAULT 'queued'
                             CHECK (status IN ('queued','sending','done','failed')),

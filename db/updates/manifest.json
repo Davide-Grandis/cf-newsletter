@@ -4,5 +4,11 @@
     "file": "0001_block_bounce_count.sql",
     "description": "Track policy and reputation blocks separately from hard and soft bounces",
     "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('subscribers') WHERE name = 'block_bounce_count'"
+  },
+  {
+    "id": "0002_newsletter_reply_to",
+    "file": "0002_newsletter_reply_to.sql",
+    "description": "Configure campaign reply addresses per newsletter",
+    "checkSql": "SELECT CASE WHEN (SELECT COUNT(*) FROM pragma_table_info('newsletters') WHERE name = 'reply_to_address') = 1 AND (SELECT COUNT(*) FROM pragma_table_info('newsletters') WHERE name = 'reply_to_author') = 1 AND (SELECT COUNT(*) FROM pragma_table_info('campaigns') WHERE name = 'reply_to_address') = 1 THEN 1 ELSE 0 END AS present"
   }
 ]
