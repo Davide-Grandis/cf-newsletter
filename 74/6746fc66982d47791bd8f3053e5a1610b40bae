@@ -1,0 +1,49 @@
+web/src/pages/Newsletters.tsx
+  s_0ae62d5af93425::t_4b2feb26520c05 29,72,99-100,108-109,116,171-191
+db/schema.sql
+  s_5d56f4b080232c::t_0db66fd12f61ac 15-16,88
+db/updates/0002_newsletter_reply_to.sql
+  s_5d56f4b080232c::t_e42874a082fa44 1-3
+db/updates/manifest.json
+  s_5d56f4b080232c::t_7cb0dc31617718 7-12
+shared/db.ts
+  s_5d56f4b080232c::t_5afdd43e60722f 20
+shared/mime.ts
+  s_5d56f4b080232c::t_ea7a868d6c0391 18,92
+shared/types.ts
+  s_5d56f4b080232c::t_c49f53396717f1 24
+web/src/api.ts
+  s_5d56f4b080232c::t_e3f684e24d4dc0 66-67
+web/src/pages/NewsletterDetail.tsx
+  s_5d56f4b080232c::t_4ec375b5ddb57e 50-51,59-65,103,197,207,210-216,226-227,234-235,242-244,258-259,295-316,365-368
+workers/admin/src/index.ts
+  s_5d56f4b080232c::t_219461f2a571f7 280-290,1024,1028-1029,1051-1055,1067-1068,1070,1092-1101,1234,1251-1252,1288-1300
+workers/consumer/src/index.ts
+  s_5d56f4b080232c::t_7eccf9ec6ccadb 237
+workers/ingest/src/index.ts
+  s_5d56f4b080232c::t_5923506124d969 12,49,51,177-190,260-263,265
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "746746fc66982d47791bd8f3053e5a1610b40bae",
+  "prompts": {},
+  "sessions": {
+    "s_0ae62d5af93425": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "perfect-drum",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_5d56f4b080232c": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_5d56f4b080232c",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
