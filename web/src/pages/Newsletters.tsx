@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api, Newsletter } from '../api';
@@ -7,6 +7,13 @@ import { Tooltip } from '../components/Tooltip';
 import { PAGE_SIZE, Pagination } from '../components/Pagination';
 
 type SortKey = 'name' | 'inbound_address' | 'subscriber_count' | 'author_count' | 'enabled';
+type NewsletterList = {
+  items: Newsletter[];
+  total: number;
+  enabledTotal: number;
+  filteredTotal: number;
+  nextCursor: number | null;
+};
 
 export default function Newsletters() {
   const qc = useQueryClient();
@@ -15,17 +22,33 @@ export default function Newsletters() {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
   const [showSearch, setShowSearch] = useState(false);
   const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
 
   const [inboundLocal, setInboundLocal] = useState('');
   const [senderLocal, setSenderLocal] = useState('');
 
   const [page, setPage] = useState(0);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setSearch(query.trim());
+      setPage(0);
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
   const list = useQuery({
-    queryKey: ['newsletters'],
-    // Newsletters are searched and sorted entirely client-side, so we fetch the
-    // full set once and paginate it locally below.
-    queryFn: () => api<{ items: Newsletter[] }>('/api/newsletters?limit=1000'),
+    queryKey: ['newsletters', page, search, sort.key, sort.dir],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        cursor: String(page * PAGE_SIZE),
+        q: search,
+        sort: sort.key,
+        direction: sort.dir,
+      });
+      return api<NewsletterList>(`/api/newsletters?${params}`);
+    },
   });
+  const items = list.data?.items ?? [];
 
   // Sending domain and default sender come from the identity payload — admins
   // cannot read the super_admin-only settings endpoint. The address inputs
@@ -39,28 +62,10 @@ export default function Newsletters() {
   const canCreate =
     me.data?.role === 'super_admin' || (!!me.data?.allow_admin_newsletter_crud && isEditAdmin);
 
-  const items = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const arr = (list.data?.items ?? []).filter(
-      (n) => !q || n.name.toLowerCase().includes(q) || n.inbound_address.toLowerCase().includes(q),
-    );
-    const { key, dir } = sort;
-    arr.sort((a, b) => {
-      if (key === 'name' || key === 'inbound_address') {
-        return String(a[key] ?? '').localeCompare(String(b[key] ?? ''), undefined, { sensitivity: 'base' });
-      }
-      return Number(a[key] ?? 0) - Number(b[key] ?? 0);
-    });
-    return dir === 'desc' ? arr.reverse() : arr;
-  }, [list.data, sort, query]);
-
   function toggleSort(key: SortKey) {
+    setPage(0);
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
   }
-
-  // Reset to the first page whenever the filtered/sorted result set changes.
-  useEffect(() => setPage(0), [query, sort]);
-  const pageItems = items.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
   const create = useMutation({
     mutationFn: (body: { name: string; inbound_address: string; from_address?: string }) =>
@@ -116,16 +121,13 @@ export default function Newsletters() {
           Newsletters
           {list.data && (
             <span className="ml-2 text-xl font-normal text-slate-500 dark:text-slate-400">
-              (total {list.data.items.length}, enabled {list.data.items.filter((n) => n.enabled === 1).length})
+              (total {list.data.total}, enabled {list.data.enabledTotal})
             </span>
           )}
         </h1>
         <p className="text-sm text-slate-500 mt-2 dark:text-slate-400">
           Each newsletter is an independent mailing list with its own inbound address, authors and
           subscribers.
-          {me.data?.role === 'super_admin' && (
-            <><br />Note: this page displays up to 1,000 newsletters.</>
-          )}
         </p>
       </div>
 
@@ -185,10 +187,11 @@ export default function Newsletters() {
           type="button"
           aria-label="Search"
           onClick={() => {
-            setShowSearch((v) => {
-              if (v) setQuery('');
-              return !v;
-            });
+            if (showSearch) {
+              setQuery('');
+              setPage(0);
+            }
+            setShowSearch(!showSearch);
           }}
           className={`inline-flex items-center justify-center rounded border p-1.5 ${
             showSearch
@@ -215,7 +218,7 @@ export default function Newsletters() {
             {list.isLoading && (
               <tr><td colSpan={5} className="p-4 text-center text-slate-500 dark:text-slate-400">Loading…</td></tr>
             )}
-            {pageItems.map((n) => (
+            {items.map((n) => (
               <tr key={n.id} className="border-t border-slate-100 dark:border-slate-800">
                 <td className="p-2">
                   <Link to={`/newsletters/${n.id}`} className="font-medium text-slate-900 hover:underline dark:text-slate-100">
@@ -242,7 +245,7 @@ export default function Newsletters() {
               </tr>
             ))}
             {list.data && items.length === 0 && (
-              <tr><td colSpan={5} className="p-4 text-center text-slate-500 dark:text-slate-400">{query ? 'No matches.' : 'No newsletters yet.'}</td></tr>
+              <tr><td colSpan={5} className="p-4 text-center text-slate-500 dark:text-slate-400">{search ? 'No matches.' : 'No newsletters yet.'}</td></tr>
             )}
           </tbody>
         </table>
@@ -250,8 +253,9 @@ export default function Newsletters() {
 
       <Pagination
         page={page}
-        total={items.length}
-        itemCount={pageItems.length}
+        total={list.data?.filteredTotal ?? 0}
+        itemCount={items.length}
+        busy={list.isFetching}
         onPage={setPage}
       />
     </div>

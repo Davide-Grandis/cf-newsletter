@@ -946,32 +946,63 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
 
   if (m === 'GET' && p === '/api/newsletters') {
     const limit = clamp(Number(url.searchParams.get('limit') ?? '20'), 1, 1000);
-    const offset = Math.max(0, Number(url.searchParams.get('cursor') ?? '0') || 0);
+    const offset = Math.max(0, Math.floor(Number(url.searchParams.get('cursor') ?? '0') || 0));
+    const search = url.searchParams.get('q')?.trim() ?? '';
+    const searchPattern = `%${search.replace(/[\\%_]/g, '\\$&')}%`;
+    const sortColumns: Record<string, string> = {
+      name: 'n.name COLLATE NOCASE',
+      inbound_address: 'n.inbound_address COLLATE NOCASE',
+      subscriber_count: 'subscriber_count',
+      author_count: 'author_count',
+      enabled: 'n.enabled',
+    };
+    const sortColumn = sortColumns[url.searchParams.get('sort') ?? ''] ?? sortColumns.name;
+    const sortDirection = url.searchParams.get('direction') === 'desc' ? 'DESC' : 'ASC';
     // Admins only see the newsletters they are assigned to; super admins see all.
     if (!isSuper && auth.newsletterIds.length === 0) {
-      return Response.json({ items: [], total: 0, nextCursor: null });
+      return Response.json({ items: [], total: 0, enabledTotal: 0, filteredTotal: 0, nextCursor: null });
     }
     const scope = isSuper ? '' : `WHERE n.id IN (${inPlaceholders(auth.newsletterIds.length)})`;
     const scopeBinds = isSuper ? [] : auth.newsletterIds;
-    const [page, count] = await Promise.all([
+    const searchFilter = search
+      ? "(n.name COLLATE NOCASE LIKE ? ESCAPE '\\' OR n.inbound_address COLLATE NOCASE LIKE ? ESCAPE '\\')"
+      : '';
+    const where = `${scope}${searchFilter ? `${scope ? ' AND' : 'WHERE'} ${searchFilter}` : ''}`;
+    const searchBinds = search ? [searchPattern, searchPattern] : [];
+    const [page, counts, filteredCount] = await Promise.all([
       env.DB
         .prepare(
           `SELECT n.id, n.name, n.inbound_address, n.from_address, n.slug, n.allow_public_signup, n.enabled, n.created_at, ` +
             `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id) AS subscriber_count, ` +
             `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id AND s.status='active') AS active_count, ` +
             `(SELECT COUNT(*) FROM authors a WHERE a.newsletter_id = n.id) AS author_count ` +
-            `FROM newsletters n ${scope} ORDER BY n.created_at ASC LIMIT ? OFFSET ?`,
+            `FROM newsletters n ${where} ORDER BY ${sortColumn} ${sortDirection}, n.id ASC LIMIT ? OFFSET ?`,
         )
-        .bind(...scopeBinds, limit, offset)
+        .bind(...scopeBinds, ...searchBinds, limit, offset)
         .all(),
-      env.DB.prepare(`SELECT COUNT(*) AS n FROM newsletters n ${scope}`).bind(...scopeBinds).first<{ n: number }>(),
+      env.DB
+        .prepare(
+          `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN n.enabled = 1 THEN 1 ELSE 0 END), 0) AS enabled_total ` +
+            `FROM newsletters n ${scope}`,
+        )
+        .bind(...scopeBinds)
+        .first<{ total: number; enabled_total: number }>(),
+      search
+        ? env.DB
+            .prepare(`SELECT COUNT(*) AS n FROM newsletters n ${where}`)
+            .bind(...scopeBinds, ...searchBinds)
+            .first<{ n: number }>()
+        : Promise.resolve(null),
     ]);
     const items = page.results ?? [];
-    const total = count?.n ?? 0;
+    const total = counts?.total ?? 0;
+    const filteredTotal = filteredCount?.n ?? total;
     return Response.json({
       items,
       total,
-      nextCursor: offset + items.length < total ? offset + limit : null,
+      enabledTotal: counts?.enabled_total ?? 0,
+      filteredTotal,
+      nextCursor: offset + items.length < filteredTotal ? offset + limit : null,
     });
   }
 
