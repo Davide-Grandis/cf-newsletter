@@ -1,0 +1,19 @@
+workers/admin/src/index.ts
+  s_243a5e5e8e0879::t_f2ccc54344b8e0 1064-1066,1071-1083,1093,2644,2646-2654,2656-2664
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6681128008a80e7dea2191d58001e69b6f277b75",
+  "prompts": {},
+  "sessions": {
+    "s_243a5e5e8e0879": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_243a5e5e8e0879",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
