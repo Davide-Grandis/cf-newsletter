@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api, Newsletter } from '../api';
 import { useIdentity, canEditNewsletter } from '../auth';
 import Subscribers from './Subscribers';
@@ -13,11 +13,8 @@ type Tab = 'subscribers' | 'authors' | 'admins' | 'footer' | 'signup';
 export default function NewsletterDetail() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('admins');
   const [warn, setWarn] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [delErr, setDelErr] = useState<string | null>(null);
 
   const detail = useQuery({
     queryKey: ['newsletter', id],
@@ -25,15 +22,13 @@ export default function NewsletterDetail() {
   });
 
   // Fixed sending domain + default sender come from the identity payload
-  // (admins cannot read the super_admin-only settings endpoint). Deleting a
-  // newsletter is gated like creation: super admins, or admins with the toggle.
+  // (admins cannot read the super_admin-only settings endpoint).
   const me = useIdentity();
   const domain = me.data?.base_domain ?? '';
   const defaultSenderLocal = localPart(me.data?.from_address ?? '');
   // Read-only admins may view but not change the newsletter; super admins and
-  // edit-admins may edit. Deleting also requires the create/delete toggle.
+  // edit-admins may edit.
   const canEdit = canEditNewsletter(me.data, id);
-  const canDelete = canEdit && (me.data?.role === 'super_admin' || !!me.data?.allow_admin_newsletter_crud);
 
   // Admin count for the tab label. Shares the same query key that
   // NewsletterAdmins invalidates on add/remove, so it updates immediately.
@@ -47,7 +42,7 @@ export default function NewsletterDetail() {
   const patch = useMutation({
     mutationFn: (
       body: Partial<
-        Pick<Newsletter, 'name' | 'inbound_address' | 'from_address' | 'reply_to_address' | 'footer_html' | 'footer_text' | 'slug'>
+        Pick<Newsletter, 'inbound_address' | 'from_address' | 'reply_to_address' | 'footer_html' | 'footer_text' | 'slug'>
       > & { enabled?: boolean; allow_public_signup?: boolean; reply_to_author?: boolean },
     ) => api<{ routing_warning?: string }>(`/api/newsletters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: (res) => {
@@ -57,7 +52,6 @@ export default function NewsletterDetail() {
     },
   });
   const saveSettings = (body: {
-    name?: string;
     inbound_address?: string;
     from_address?: string | null;
     reply_to_address?: string | null;
@@ -67,15 +61,6 @@ export default function NewsletterDetail() {
   const saveFooter = (body: { footer_html?: string | null; footer_text?: string | null }) =>
     patch.mutateAsync(body);
   const saveSignup = (body: { slug?: string; allow_public_signup?: boolean }) => patch.mutateAsync(body);
-
-  const del = useMutation({
-    mutationFn: () => api(`/api/newsletters/${id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['newsletters'] });
-      navigate('/newsletters');
-    },
-    onError: (e) => setDelErr((e as Error).message),
-  });
 
   if (detail.isLoading) return <div className="text-sm text-slate-500 dark:text-slate-400">Loading…</div>;
   if (detail.error) return <div className="text-sm text-red-600">{(detail.error as Error).message}</div>;
@@ -102,45 +87,9 @@ export default function NewsletterDetail() {
         defaultSenderLocal={defaultSenderLocal}
         defaultSenderAddress={me.data?.from_address ?? ''}
         canEdit={canEdit}
-        canDelete={canDelete}
         onSave={saveSettings}
         saving={patch.isPending}
-        onDelete={() => {
-          setDelErr(null);
-          setConfirmDelete(true);
-        }}
       />
-
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm bg-white rounded-lg shadow-lg p-5 dark:bg-slate-900 dark:border dark:border-slate-700">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Delete newsletter?</h2>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              This permanently deletes <span className="font-medium">{n.name}</span>, its subscribers, authors and
-              Email Routing rule. This cannot be undone.
-            </p>
-            {delErr && <p className="mt-2 text-sm text-red-600">{delErr}</p>}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={del.isPending}
-                onClick={() => setConfirmDelete(false)}
-                className="text-sm rounded px-3 py-1.5 border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={del.isPending}
-                onClick={() => del.mutate()}
-                className="text-sm rounded px-3 py-1.5 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {del.isPending ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div>
         <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 mb-4">
@@ -196,31 +145,22 @@ function Settings({
   defaultSenderLocal,
   defaultSenderAddress,
   canEdit,
-  canDelete,
   onSave,
   saving,
-  onDelete,
 }: {
   n: Newsletter;
   domain: string;
   defaultSenderLocal: string;
   defaultSenderAddress: string;
   canEdit: boolean;
-  canDelete: boolean;
   onSave: (body: {
-    name?: string;
     inbound_address?: string;
     from_address?: string | null;
     reply_to_address?: string | null;
     reply_to_author?: boolean;
   }) => Promise<unknown>;
   saving: boolean;
-  onDelete: () => void;
 }) {
-  // Fields are locked until the user clicks Edit (mirrors the Settings page),
-  // limiting the chance of accidental changes.
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(n.name);
   const [inbound, setInbound] = useState(localPart(n.inbound_address));
   const [sender, setSender] = useState(localPart(n.from_address ?? ''));
   const [replyToAddress, setReplyToAddress] = useState(n.reply_to_address ?? '');
@@ -228,7 +168,6 @@ function Settings({
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
-    setName(n.name);
     setInbound(localPart(n.inbound_address));
     setSender(localPart(n.from_address ?? ''));
     setReplyToAddress(n.reply_to_address ?? '');
@@ -237,29 +176,14 @@ function Settings({
   }
 
   const dirty =
-    name.trim() !== n.name ||
     inbound.trim() !== localPart(n.inbound_address) ||
     sender.trim() !== localPart(n.from_address ?? '') ||
     replyToAddress.trim() !== (n.reply_to_address ?? '') ||
     replyToAuthor !== (n.reply_to_author === 1);
 
   async function save() {
-    if (!dirty) {
-      setEditing(false);
-      return;
-    }
+    if (!dirty) return;
     setError(null);
-    const trimmedName = name.trim();
-    if (trimmedName !== n.name) {
-      if (!trimmedName) {
-        setError('Please add a name.');
-        return;
-      }
-      if (trimmedName.length < 3) {
-        setError('Invalid name, too short. Min lenght is 3 characters.');
-        return;
-      }
-    }
     const replyTo = replyToAddress.trim();
     if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
       setError('Invalid input, please add a valid email address.');
@@ -267,14 +191,15 @@ function Settings({
     }
     try {
       await onSave({
-        name: trimmedName === n.name ? undefined : trimmedName,
         inbound_address: `${inbound.trim()}@${domain}`,
         // Empty string clears the override (falls back to the global sender).
         from_address: sender.trim() ? `${sender.trim()}@${domain}` : '',
         reply_to_address: replyToAddress.trim(),
         reply_to_author: replyToAuthor,
       });
-      setEditing(false);
+      setInbound(inbound.trim().toLowerCase());
+      setSender(sender.trim().toLowerCase());
+      setReplyToAddress(replyTo.toLowerCase());
     } catch (e) {
       setError((e as Error).message);
     }
@@ -282,22 +207,12 @@ function Settings({
 
   return (
     <section className="bg-white border border-slate-200 rounded p-3 dark:bg-slate-900 dark:border-slate-800">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="flex-1 min-w-[160px]">
-          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Name</label>
-          <input
-            value={name}
-            minLength={3}
-            disabled={!editing}
-            onChange={(e) => setName(e.target.value)}
-            className={inputCls}
-          />
-        </div>
-        <div className="flex-1 min-w-[200px]">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="min-w-0">
           <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Inbound address</label>
-          <LocalPartInput value={inbound} onChange={setInbound} domain={domain} disabled={!editing} />
+          <LocalPartInput value={inbound} onChange={setInbound} domain={domain} disabled={!canEdit} />
         </div>
-        <div className="flex-1 min-w-[200px]">
+        <div className="min-w-0">
           <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Sender <span className="normal-case tracking-normal text-slate-400">(optional)</span>
           </label>
@@ -305,78 +220,55 @@ function Settings({
             value={sender}
             onChange={setSender}
             domain={domain}
-            disabled={!editing}
+            disabled={!canEdit}
             placeholder={defaultSenderLocal || 'default'}
           />
         </div>
-        <div className="flex-1 min-w-[220px]">
-          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+        <div className="min-w-0 flex flex-col gap-2">
+          <div>
+            <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              type="email"
+              value={replyToAddress}
+              disabled={!canEdit || replyToAuthor}
+              onChange={(e) => setReplyToAddress(e.target.value)}
+              placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
+              className={inputCls}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={replyToAuthor}
+              disabled={!canEdit}
+              onChange={(e) => setReplyToAuthor(e.target.checked)}
+            />
+            Use campaign author’s email address for replies
           </label>
-          <input
-            type="email"
-            value={replyToAddress}
-            disabled={!editing || replyToAuthor}
-            onChange={(e) => setReplyToAddress(e.target.value)}
-            placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
-            className={inputCls}
-          />
         </div>
-        <label className="flex items-center gap-2 py-1 text-sm text-slate-600 dark:text-slate-300">
-          <input
-            type="checkbox"
-            checked={replyToAuthor}
-            disabled={!editing}
-            onChange={(e) => setReplyToAuthor(e.target.checked)}
-          />
-          Use campaign author’s email address for replies
-        </label>
-        {editing ? (
-          <>
-            <button
-              type="button"
-              disabled={!dirty || saving}
-              onClick={save}
-              className="bg-slate-900 text-white text-sm rounded px-3 py-1.5 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => {
-                reset();
-                setEditing(false);
-              }}
-              className="text-sm rounded px-3 py-1.5 border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          canEdit && (
-            <button
-              type="button"
-              onClick={() => {
-                reset();
-                setEditing(true);
-              }}
-              className="text-sm rounded px-3 py-1.5 border border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Edit
-            </button>
-          )
-        )}
-        {canDelete && (
+      </div>
+      {canEdit && (
+        <div className="mt-3 flex justify-end gap-2">
           <button
             type="button"
-            onClick={onDelete}
-            className="bg-red-600 text-white text-sm rounded px-3 py-1.5 hover:bg-red-700"
+            disabled={saving}
+            onClick={reset}
+            className="text-sm rounded px-3 py-1.5 border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-            Delete
+            Cancel
           </button>
-        )}
-      </div>
+          <button
+            type="button"
+            disabled={!dirty || saving}
+            onClick={save}
+            className="bg-slate-900 text-white text-sm rounded px-3 py-1.5 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      )}
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
         Authors can send an email to <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{n.inbound_address}</code> to start a campaign. The sender email address of the campaign is <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{n.from_address || defaultSenderAddress || 'the global default'}</code>, leave it empty for the default value.
