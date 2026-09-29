@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { api, Newsletter } from '../api';
 import { useIdentity, canEditNewsletter } from '../auth';
 import Subscribers from './Subscribers';
@@ -13,9 +14,12 @@ type Tab = 'subscribers' | 'authors' | 'admins' | 'footer' | 'signup';
 export default function NewsletterDetail() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('admins');
   const [warn, setWarn] = useState<string | null>(null);
   const [editingSettings, setEditingSettings] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const detail = useQuery({
     queryKey: ['newsletter', id],
@@ -30,6 +34,7 @@ export default function NewsletterDetail() {
   // Read-only admins may view but not change the newsletter; super admins and
   // edit-admins may edit.
   const canEdit = canEditNewsletter(me.data, id);
+  const canDelete = canEdit && (me.data?.role === 'super_admin' || !!me.data?.allow_admin_newsletter_crud);
 
   // Admin count for the tab label. Shares the same query key that
   // NewsletterAdmins invalidates on add/remove, so it updates immediately.
@@ -65,11 +70,31 @@ export default function NewsletterDetail() {
   const saveFooter = (body: { footer_html?: string | null; footer_text?: string | null }) =>
     patch.mutateAsync(body);
   const saveSignup = (body: { slug?: string; allow_public_signup?: boolean }) => patch.mutateAsync(body);
+  const deleteNewsletter = useMutation({
+    mutationFn: () => api<{ routing_warning?: string }>(`/api/newsletters/${id}`, { method: 'DELETE' }),
+    onSuccess: async (res) => {
+      await qc.invalidateQueries({ queryKey: ['newsletters'] });
+      navigate('/newsletters', {
+        state: { newsletter_deleted: true, routing_warning: res.routing_warning ?? null },
+      });
+    },
+    onError: async (e) => {
+      setDeleteError((e as Error).message);
+      await qc.invalidateQueries({ queryKey: ['newsletter', id] });
+    },
+  });
 
   if (detail.isLoading) return <div className="text-sm text-slate-500 dark:text-slate-400">Loading…</div>;
   if (detail.error) return <div className="text-sm text-red-600">{(detail.error as Error).message}</div>;
   if (!detail.data) return null;
   const n = detail.data;
+  const campaignCount = n.campaign_count;
+  const deleteDisabled = typeof campaignCount !== 'number' || campaignCount > 0 || deleteNewsletter.isPending;
+  const deleteTooltip = typeof campaignCount !== 'number'
+    ? 'Campaign count unavailable'
+    : campaignCount > 0
+      ? 'Cannot delete, the newsletter has campaigns'
+      : 'Delete newsletter';
 
   return (
     <div className="space-y-6">
@@ -81,19 +106,37 @@ export default function NewsletterDetail() {
             <>
               <button
                 type="button"
+                aria-label="Edit newsletter"
+                title="Edit newsletter"
                 onClick={() => setEditingSettings(true)}
-                className="text-xs rounded px-2 py-1 border border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
               >
-                Edit
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+                </svg>
               </button>
-              <button
-                type="button"
-                disabled
-                title="Delete action not available yet"
-                className="text-xs rounded px-2 py-1 border border-red-300 text-red-500 disabled:opacity-50 dark:border-red-800 dark:text-red-400"
-              >
-                Delete
-              </button>
+              {canDelete && (
+                <span className="inline-flex" title={deleteTooltip}>
+                  <button
+                    type="button"
+                    aria-label="Delete newsletter"
+                    disabled={deleteDisabled}
+                    onClick={() => {
+                      setDeleteError(null);
+                      setConfirmDelete(true);
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-red-300 text-red-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="m19 6-1 14H6L5 6" />
+                      <path d="M10 11v6M14 11v6" />
+                    </svg>
+                  </button>
+                </span>
+              )}
             </>
           )}
         </div>
@@ -117,6 +160,26 @@ export default function NewsletterDetail() {
         onSave={saveSettings}
         saving={patch.isPending}
       />
+
+      {confirmDelete && (
+        <ConfirmDialog
+          open={confirmDelete}
+          title="Delete newsletter?"
+          message={deleteError ?? `This permanently deletes ${n.name}, its subscribers, authors, and admin assignments. It cannot be undone.`}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          danger
+          busy={deleteNewsletter.isPending}
+          onConfirm={() => {
+            setDeleteError(null);
+            deleteNewsletter.mutate();
+          }}
+          onCancel={() => {
+            setConfirmDelete(false);
+            setDeleteError(null);
+          }}
+        />
+      )}
 
       <div>
         <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 mb-4">

@@ -1236,7 +1236,8 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
             `SELECT n.id, n.name, n.inbound_address, n.from_address, n.reply_to_address, n.reply_to_author, n.footer_html, n.footer_text, n.slug, n.allow_public_signup, n.enabled, n.created_at, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id) AS subscriber_count, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id AND s.status='active') AS active_count, ` +
-              `(SELECT COUNT(*) FROM authors a WHERE a.newsletter_id = n.id) AS author_count ` +
+              `(SELECT COUNT(*) FROM authors a WHERE a.newsletter_id = n.id) AS author_count, ` +
+              `(SELECT COUNT(*) FROM campaigns c WHERE c.newsletter_id = n.id) AS campaign_count ` +
               `FROM newsletters n WHERE n.id = ?`,
           )
           .bind(nid)
@@ -1414,25 +1415,35 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         // Deleting newsletters is a super_admin action unless the toggle lets
         // admins do it too (membership already checked above).
         if (!allowNlCrud) return forbidden();
-        // Campaigns retain a newsletter_id with no cascade; refuse to delete a
-        // newsletter that still has campaign history to avoid orphaning it.
-        const camp = await env.DB
-          .prepare('SELECT COUNT(*) AS n FROM campaigns WHERE newsletter_id = ?')
-          .bind(nid)
-          .first<{ n: number }>();
-        if ((camp?.n ?? 0) > 0) {
-          return Response.json(
-            { error: 'newsletter has campaign history; cannot delete' },
-            { status: 409 },
-          );
-        }
         const cur = await env.DB
           .prepare('SELECT inbound_address FROM newsletters WHERE id = ?')
           .bind(nid)
           .first<{ inbound_address: string }>();
-        const res = await env.DB.prepare('DELETE FROM newsletters WHERE id = ?').bind(nid).run();
-        if (!res.meta?.changes) return Response.json({ error: 'not found' }, { status: 404 });
-        const routing_warning = cur ? await deleteRoutingRule(env, cur.inbound_address) : undefined;
+        if (!cur) return Response.json({ error: 'not found' }, { status: 404 });
+        const results = await env.DB.batch([
+          env.DB
+            .prepare(
+              'DELETE FROM logs WHERE newsletter_id = ? AND EXISTS (SELECT 1 FROM newsletters WHERE id = ?) ' +
+                'AND NOT EXISTS (SELECT 1 FROM campaigns WHERE newsletter_id = ?)',
+            )
+            .bind(nid, nid, nid),
+          env.DB
+            .prepare(
+              'DELETE FROM newsletters WHERE id = ? AND NOT EXISTS (SELECT 1 FROM campaigns WHERE newsletter_id = ?)',
+            )
+            .bind(nid, nid),
+        ]);
+        if (!results[1]?.meta?.changes) {
+          const camp = await env.DB
+            .prepare('SELECT COUNT(*) AS n FROM campaigns WHERE newsletter_id = ?')
+            .bind(nid)
+            .first<{ n: number }>();
+          if ((camp?.n ?? 0) > 0) {
+            return Response.json({ error: 'Cannot delete, the newsletter has campaigns' }, { status: 409 });
+          }
+          return Response.json({ error: 'not found' }, { status: 404 });
+        }
+        const routing_warning = await deleteRoutingRule(env, cur.inbound_address);
         return Response.json({ ok: true, routing_warning });
       }
     }

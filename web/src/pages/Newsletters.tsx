@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, Newsletter } from '../api';
 import { useIdentity } from '../auth';
 import { Tooltip } from '../components/Tooltip';
@@ -17,6 +17,8 @@ type NewsletterList = {
 
 export default function Newsletters() {
   const qc = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [err, setErr] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
@@ -46,6 +48,18 @@ export default function Newsletters() {
     }, 250);
     return () => window.clearTimeout(timeout);
   }, [query]);
+  useEffect(() => {
+    const notice = location.state as { newsletter_deleted?: boolean; routing_warning?: string | null } | null;
+    if (!notice?.newsletter_deleted) return;
+    if (notice.routing_warning) {
+      setWarn(notice.routing_warning);
+      setCreateSuccess(null);
+    } else {
+      setWarn(null);
+      setCreateSuccess('Newsletter deleted.');
+    }
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.key, location.pathname, location.state, navigate]);
   const list = useQuery({
     queryKey: ['newsletters', page, search, sort.key, sort.dir],
     queryFn: () => {

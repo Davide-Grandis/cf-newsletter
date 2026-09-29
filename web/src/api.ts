@@ -79,6 +79,7 @@ export interface Newsletter {
   subscriber_count?: number;
   active_count?: number;
   author_count?: number;
+  campaign_count?: number;
 }
 
 export interface Campaign {
