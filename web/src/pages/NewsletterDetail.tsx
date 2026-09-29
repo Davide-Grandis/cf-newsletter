@@ -249,14 +249,19 @@ function Settings({
       return;
     }
     setError(null);
+    const trimmedName = name.trim();
+    if (trimmedName !== n.name && trimmedName.length < 3) {
+      setError('Newsletter name must be at least 3 characters.');
+      return;
+    }
     const replyTo = replyToAddress.trim();
     if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
-      setError('Enter a valid Reply-To email address.');
+      setError('Invalid input, please add a valid email address.');
       return;
     }
     try {
       await onSave({
-        name: name.trim(),
+        name: trimmedName === n.name ? undefined : trimmedName,
         inbound_address: `${inbound.trim()}@${domain}`,
         // Empty string clears the override (falls back to the global sender).
         from_address: sender.trim() ? `${sender.trim()}@${domain}` : '',
@@ -276,6 +281,7 @@ function Settings({
           <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Name</label>
           <input
             value={name}
+            minLength={3}
             disabled={!editing}
             onChange={(e) => setName(e.target.value)}
             className={inputCls}

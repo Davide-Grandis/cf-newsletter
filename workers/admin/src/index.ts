@@ -279,11 +279,11 @@ function validateFromAddress(
 
 function normalizeReplyToAddress(value: unknown): { value: string | null } | { error: string } {
   if (value === undefined || value === null || value === '') return { value: null };
-  if (typeof value !== 'string') return { error: 'reply_to_address must be a string' };
+  if (typeof value !== 'string') return { error: 'Invalid input, please add a valid email address.' };
   const address = value.trim().toLowerCase();
   if (!address) return { value: null };
   if (address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
-    return { error: 'valid reply_to_address required' };
+    return { error: 'Invalid input, please add a valid email address.' };
   }
   return { value: address };
 }
@@ -1033,6 +1033,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     const nm = (name ?? '').trim();
     const addr = (inbound_address ?? '').trim().toLowerCase();
     if (!nm) return Response.json({ error: 'name required' }, { status: 400 });
+    if (nm.length < 3) return Response.json({ error: 'name must be at least 3 characters' }, { status: 400 });
     if (!addr || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
       return Response.json({ error: 'valid inbound_address required' }, { status: 400 });
     }
@@ -1260,6 +1261,9 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         if (typeof body.name === 'string') {
           const nm = body.name.trim();
           if (!nm) return Response.json({ error: 'name cannot be empty' }, { status: 400 });
+          if (nm.length < 3) {
+            return Response.json({ error: 'name must be at least 3 characters' }, { status: 400 });
+          }
           // Reject a rename that collides with another newsletter's name
           // (case-insensitive); the newsletter itself is excluded.
           const dupe = await env.DB

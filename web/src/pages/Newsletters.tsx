@@ -18,6 +18,7 @@ type NewsletterList = {
 export default function Newsletters() {
   const qc = useQueryClient();
   const [err, setErr] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
   const [showSearch, setShowSearch] = useState(false);
@@ -93,15 +94,23 @@ export default function Newsletters() {
   function onCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErr(null);
+    setCreateSuccess(null);
     const fd = new FormData(e.currentTarget);
     const name = String(fd.get('name') ?? '').trim();
     const inbound = inboundLocal.trim();
     const sender = senderLocal.trim();
     const replyTo = String(fd.get('reply_to_address') ?? '').trim();
     const useAuthorReplyTo = fd.get('reply_to_author') === 'on';
-    if (!name || !inbound) return;
+    if (name.length < 3) {
+      setErr('Newsletter name must be at least 3 characters.');
+      return;
+    }
+    if (!inbound) {
+      setErr('Inbound address is required.');
+      return;
+    }
     if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
-      setErr('Enter a valid Reply-To email address.');
+      setErr('Invalid input, please add a valid email address.');
       return;
     }
     const form = e.currentTarget;
@@ -116,6 +125,7 @@ export default function Newsletters() {
       {
         onSuccess: () => {
           form.reset();
+          setCreateSuccess(`Newsletter "${name}" created.`);
           setInboundLocal('');
           setSenderLocal('');
           setReplyToAuthor(false);
@@ -149,6 +159,11 @@ export default function Newsletters() {
           <button onClick={() => setWarn(null)} className="text-amber-600 hover:underline dark:text-amber-400">dismiss</button>
         </div>
       )}
+      {createSuccess && (
+        <div role="status" className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2 dark:text-emerald-300 dark:bg-emerald-900/30 dark:border-emerald-800/60">
+          {createSuccess}
+        </div>
+      )}
 
       {canCreate && (
         <div
@@ -162,7 +177,14 @@ export default function Newsletters() {
                 <div className="grid grid-cols-1 md:grid-cols-[45%_45%] gap-2 items-end">
                   <div className="min-w-0">
                     <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Name</label>
-                    <input name="name" required placeholder="Weekly digest" className={inputCls} />
+                    <input
+                      name="name"
+                      required
+                      minLength={3}
+                      onInvalid={() => setErr('Newsletter name must be at least 3 characters.')}
+                      placeholder="Weekly digest"
+                      className={inputCls}
+                    />
                   </div>
                   <div className="min-w-0">
                     <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -191,7 +213,7 @@ export default function Newsletters() {
                         name="reply_to_address"
                         disabled={replyToAuthor}
                         placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
-                        onInvalid={() => setErr('Enter a valid Reply-To email address.')}
+                        onInvalid={() => setErr('Invalid input, please add a valid email address.')}
                         className={inputCls}
                       />
                     </div>
@@ -238,6 +260,7 @@ export default function Newsletters() {
                 type="button"
                 onClick={() => {
                   setErr(null);
+                  setCreateSuccess(null);
                   setShowCreateForm(true);
                 }}
                 className="bg-slate-900 text-white text-sm rounded px-3 py-1.5 dark:bg-slate-100 dark:text-slate-900"
