@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { api, Newsletter } from '../api';
@@ -15,6 +15,7 @@ export default function NewsletterDetail() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('admins');
   const [warn, setWarn] = useState<string | null>(null);
+  const [editingSettings, setEditingSettings] = useState(false);
 
   const detail = useQuery({
     queryKey: ['newsletter', id],
@@ -42,16 +43,19 @@ export default function NewsletterDetail() {
   const patch = useMutation({
     mutationFn: (
       body: Partial<
-        Pick<Newsletter, 'inbound_address' | 'from_address' | 'reply_to_address' | 'footer_html' | 'footer_text' | 'slug'>
+        Pick<Newsletter, 'name' | 'inbound_address' | 'from_address' | 'reply_to_address' | 'footer_html' | 'footer_text' | 'slug'>
       > & { enabled?: boolean; allow_public_signup?: boolean; reply_to_author?: boolean },
     ) => api<{ routing_warning?: string }>(`/api/newsletters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       setWarn(res.routing_warning ?? null);
-      qc.invalidateQueries({ queryKey: ['newsletter', id] });
-      qc.invalidateQueries({ queryKey: ['newsletters'] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['newsletter', id] }),
+        qc.invalidateQueries({ queryKey: ['newsletters'] }),
+      ]);
     },
   });
   const saveSettings = (body: {
+    name?: string;
     inbound_address?: string;
     from_address?: string | null;
     reply_to_address?: string | null;
@@ -71,7 +75,28 @@ export default function NewsletterDetail() {
     <div className="space-y-6">
       <div>
         <Link to="/newsletters" className="text-sm text-slate-500 hover:underline dark:text-slate-400">← Newsletters</Link>
-        <h1 className="text-xl font-semibold mt-1">{n.name}</h1>
+        <div className="flex items-center gap-2 mt-1">
+          <h1 className="text-xl font-semibold">{n.name}</h1>
+          {canEdit && !editingSettings && (
+            <>
+              <button
+                type="button"
+                onClick={() => setEditingSettings(true)}
+                className="text-xs rounded px-2 py-1 border border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                disabled
+                title="Delete action not available yet"
+                className="text-xs rounded px-2 py-1 border border-red-300 text-red-500 disabled:opacity-50 dark:border-red-800 dark:text-red-400"
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {warn && (
@@ -85,8 +110,10 @@ export default function NewsletterDetail() {
         n={n}
         domain={domain}
         defaultSenderLocal={defaultSenderLocal}
-        defaultSenderAddress={me.data?.from_address ?? ''}
         canEdit={canEdit}
+        editing={editingSettings}
+        onCancel={() => setEditingSettings(false)}
+        onSaved={() => setEditingSettings(false)}
         onSave={saveSettings}
         saving={patch.isPending}
       />
@@ -143,17 +170,22 @@ function Settings({
   n,
   domain,
   defaultSenderLocal,
-  defaultSenderAddress,
   canEdit,
+  editing,
+  onCancel,
+  onSaved,
   onSave,
   saving,
 }: {
   n: Newsletter;
   domain: string;
   defaultSenderLocal: string;
-  defaultSenderAddress: string;
   canEdit: boolean;
+  editing: boolean;
+  onCancel: () => void;
+  onSaved: () => void;
   onSave: (body: {
+    name?: string;
     inbound_address?: string;
     from_address?: string | null;
     reply_to_address?: string | null;
@@ -161,13 +193,30 @@ function Settings({
   }) => Promise<unknown>;
   saving: boolean;
 }) {
+  const [name, setName] = useState(n.name);
   const [inbound, setInbound] = useState(localPart(n.inbound_address));
   const [sender, setSender] = useState(localPart(n.from_address ?? ''));
   const [replyToAddress, setReplyToAddress] = useState(n.reply_to_address ?? '');
   const [replyToAuthor, setReplyToAuthor] = useState(n.reply_to_author === 1);
   const [error, setError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const senderInputRef = useRef<HTMLInputElement>(null);
+  const inboundInputRef = useRef<HTMLInputElement>(null);
+  const replyToInputRef = useRef<HTMLInputElement>(null);
+
+  useLayoutEffect(() => {
+    if (!editing) return;
+    setName(n.name);
+    setInbound(localPart(n.inbound_address));
+    setSender(localPart(n.from_address ?? ''));
+    setReplyToAddress(n.reply_to_address ?? '');
+    setReplyToAuthor(n.reply_to_author === 1);
+    setError(null);
+    nameInputRef.current?.setCustomValidity('');
+  }, [editing, n.name, n.inbound_address, n.from_address, n.reply_to_address, n.reply_to_author]);
 
   function reset() {
+    setName(n.name);
     setInbound(localPart(n.inbound_address));
     setSender(localPart(n.from_address ?? ''));
     setReplyToAddress(n.reply_to_address ?? '');
@@ -175,107 +224,262 @@ function Settings({
     setError(null);
   }
 
+  function showInputError(input: HTMLInputElement | null, message: string) {
+    setError(message);
+    if (!input) return;
+    input.setCustomValidity(message);
+    input.focus();
+    input.reportValidity();
+  }
+
   const dirty =
+    name.trim() !== n.name ||
     inbound.trim() !== localPart(n.inbound_address) ||
     sender.trim() !== localPart(n.from_address ?? '') ||
     replyToAddress.trim() !== (n.reply_to_address ?? '') ||
     replyToAuthor !== (n.reply_to_author === 1);
 
   async function save() {
-    if (!dirty) return;
+    if (!dirty) {
+      onSaved();
+      return;
+    }
     setError(null);
+    const trimmedName = name.trim();
+    if (trimmedName !== n.name) {
+      if (!trimmedName) {
+        showInputError(nameInputRef.current, 'Please add a name.');
+        return;
+      }
+      if (trimmedName.length < 3) {
+        showInputError(nameInputRef.current, 'Invalid name, too short. Min lenght is 3 characters.');
+        return;
+      }
+    }
+    if (sender && !/^[^\s@]+$/.test(sender)) {
+      showInputError(senderInputRef.current, 'Sender must be a valid email prefix with no spaces.');
+      return;
+    }
+    const trimmedInbound = inbound.trim();
+    if (!trimmedInbound) {
+      showInputError(inboundInputRef.current, 'Inbound address is required.');
+      return;
+    }
+    if (!/^[^\s@]+$/.test(inbound)) {
+      showInputError(inboundInputRef.current, 'Inbound address must be a valid email prefix with no spaces.');
+      return;
+    }
     const replyTo = replyToAddress.trim();
-    if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
-      setError('Invalid input, please add a valid email address.');
+    if (!replyToAuthor && replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
+      showInputError(replyToInputRef.current, 'Invalid input, please add a valid email address.');
       return;
     }
     try {
       await onSave({
-        inbound_address: `${inbound.trim()}@${domain}`,
-        // Empty string clears the override (falls back to the global sender).
+        name: trimmedName === n.name ? undefined : trimmedName,
+        inbound_address: `${trimmedInbound}@${domain}`,
         from_address: sender.trim() ? `${sender.trim()}@${domain}` : '',
-        reply_to_address: replyToAddress.trim(),
+        reply_to_address: replyTo,
         reply_to_author: replyToAuthor,
       });
-      setInbound(inbound.trim().toLowerCase());
+      setName(trimmedName);
+      setInbound(trimmedInbound.toLowerCase());
       setSender(sender.trim().toLowerCase());
       setReplyToAddress(replyTo.toLowerCase());
+      onSaved();
     } catch (e) {
-      setError((e as Error).message);
+      const message = (e as Error).message;
+      if (/inbound[_ ]address/i.test(message)) showInputError(inboundInputRef.current, message);
+      else if (/from_address|sender/i.test(message)) showInputError(senderInputRef.current, message);
+      else if (/reply[_ -]?to|email address/i.test(message)) showInputError(replyToInputRef.current, message);
+      else if (/name/i.test(message)) showInputError(nameInputRef.current, message);
+      else setError(message);
     }
   }
 
   return (
-    <section className="bg-white border border-slate-200 rounded p-3 dark:bg-slate-900 dark:border-slate-800">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="min-w-0">
-          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Inbound address</label>
-          <LocalPartInput value={inbound} onChange={setInbound} domain={domain} disabled={!canEdit} />
-        </div>
-        <div className="min-w-0">
-          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Sender <span className="normal-case tracking-normal text-slate-400">(optional)</span>
-          </label>
-          <LocalPartInput
-            value={sender}
-            onChange={setSender}
-            domain={domain}
-            disabled={!canEdit}
-            placeholder={defaultSenderLocal || 'default'}
-          />
-        </div>
-        <div className="min-w-0 flex flex-col gap-2">
-          <div>
+    <section
+      className={`rounded border p-3 bg-white dark:bg-slate-900 ${
+        editing ? 'border-orange-500 dark:border-orange-400' : 'border-slate-200 dark:border-slate-800'
+      }`}
+    >
+      {editing ? (
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+          className="flex flex-col gap-3 md:flex-row md:items-start"
+        >
+          <div className="min-w-0 flex-1 flex flex-col gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-[45%_45%] gap-2 items-end">
+              <div className="min-w-0">
+                <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Name</label>
+                <input
+                  ref={nameInputRef}
+                  name="name"
+                  value={name}
+                  required
+                  minLength={3}
+                  onInvalid={(e) => {
+                    const message = e.currentTarget.value.trim()
+                      ? 'Invalid name, too short. Min lenght is 3 characters.'
+                      : 'Please add a name.';
+                    e.currentTarget.setCustomValidity(message);
+                    setError(message);
+                  }}
+                  onChange={(e) => setName(e.target.value)}
+                  onInput={(e) => {
+                    const value = e.currentTarget.value.trim();
+                    e.currentTarget.setCustomValidity(
+                      !value
+                        ? 'Please add a name.'
+                        : value.length < 3
+                          ? 'Invalid name, too short. Min lenght is 3 characters.'
+                          : '',
+                    );
+                    setError((current) =>
+                      current === 'Please add a name.' || current === 'Invalid name, too short. Min lenght is 3 characters.'
+                        ? null
+                        : current,
+                    );
+                  }}
+                  placeholder="Weekly digest"
+                  className={inputCls}
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Sender <span className="normal-case tracking-normal text-slate-400">(defaults to "newsletter")</span>
+                </label>
+                <LocalPartInput
+                  value={sender}
+                  onChange={(value) => {
+                    setSender(value);
+                    senderInputRef.current?.setCustomValidity('');
+                    setError((current) => /sender|from_address/i.test(current ?? '') ? null : current);
+                  }}
+                  domain={domain}
+                  placeholder={defaultSenderLocal || 'default'}
+                  inputRef={senderInputRef}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-[45%_45%] gap-2 items-start">
+              <div className="min-w-0">
+                <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Inbound address</label>
+                <LocalPartInput
+                  value={inbound}
+                  onChange={(value) => {
+                    setInbound(value);
+                    inboundInputRef.current?.setCustomValidity('');
+                    setError((current) => /inbound[_ ]address/i.test(current ?? '') ? null : current);
+                  }}
+                  domain={domain}
+                  placeholder="digest"
+                  inputRef={inboundInputRef}
+                />
+              </div>
+              <div className="min-w-0 flex flex-col gap-2">
+                <div>
+                  <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    ref={replyToInputRef}
+                    type="text"
+                    inputMode="email"
+                    name="reply_to_address"
+                    value={replyToAddress}
+                    disabled={replyToAuthor}
+                    onChange={(e) => {
+                      setReplyToAddress(e.target.value);
+                      replyToInputRef.current?.setCustomValidity('');
+                      setError((current) => /reply[_ -]?to|email address/i.test(current ?? '') ? null : current);
+                    }}
+                    placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
+                    className={inputCls}
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    name="reply_to_author"
+                    checked={replyToAuthor}
+                    onChange={(e) => {
+                      setReplyToAuthor(e.target.checked);
+                      if (e.target.checked) {
+                        replyToInputRef.current?.setCustomValidity('');
+                        setError((current) => /reply[_ -]?to|email address/i.test(current ?? '') ? null : current);
+                      }
+                    }}
+                  />
+                  Use campaign author’s email for replies
+                </label>
+              </div>
+            </div>
+            {error && <div className="text-xs text-red-600">{error}</div>}
+          </div>
+          <div className="flex flex-col gap-2 md:w-28">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                reset();
+                onCancel();
+              }}
+              className="w-full text-sm rounded px-3 py-1.5 border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full bg-slate-900 text-white text-sm rounded px-3 py-1.5 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="min-w-0">
+            <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Inbound address</label>
+            <LocalPartInput value={localPart(n.inbound_address)} onChange={() => {}} domain={domain} disabled />
+          </div>
+          <div className="min-w-0">
             <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+              Sender <span className="normal-case tracking-normal text-slate-400">(optional)</span>
             </label>
-            <input
-              type="email"
-              value={replyToAddress}
-              disabled={!canEdit || replyToAuthor}
-              onChange={(e) => setReplyToAddress(e.target.value)}
-              placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
-              className={inputCls}
+            <LocalPartInput
+              value={localPart(n.from_address ?? '')}
+              onChange={() => {}}
+              domain={domain}
+              disabled
+              placeholder={defaultSenderLocal || 'default'}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={replyToAuthor}
-              disabled={!canEdit}
-              onChange={(e) => setReplyToAuthor(e.target.checked)}
-            />
-            Use campaign author’s email address for replies
-          </label>
-        </div>
-      </div>
-      {canEdit && (
-        <div className="mt-3 flex justify-end gap-2">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={reset}
-            className="text-sm rounded px-3 py-1.5 border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!dirty || saving}
-            onClick={save}
-            className="bg-slate-900 text-white text-sm rounded px-3 py-1.5 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+          <div className="min-w-0 flex flex-col gap-2">
+            <div>
+              <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={n.reply_to_address ?? ''}
+                disabled
+                placeholder={n.reply_to_author ? 'Using campaign author' : 'replies@example.com'}
+                className={inputCls}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+              <input type="checkbox" checked={n.reply_to_author === 1} disabled />
+              Use campaign author’s email for replies
+            </label>
+          </div>
         </div>
       )}
-      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
-      <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-        Authors can send an email to <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{n.inbound_address}</code> to start a campaign. The sender email address of the campaign is <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{n.from_address || defaultSenderAddress || 'the global default'}</code>, leave it empty for the default value.
-      </p>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-        Replies go to the Reply-To address above. When the campaign author option is selected, replies go to the author who sent that campaign; otherwise, a blank Reply-To falls back to From.
-      </p>
     </section>
   );
 }
