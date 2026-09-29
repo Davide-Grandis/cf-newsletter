@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState, type Ref } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api, Newsletter } from '../api';
@@ -26,7 +26,9 @@ export default function Newsletters() {
   const [search, setSearch] = useState('');
 
   const [inboundLocal, setInboundLocal] = useState('');
+  const inboundInputRef = useRef<HTMLInputElement>(null);
   const [senderLocal, setSenderLocal] = useState('');
+  const senderInputRef = useRef<HTMLInputElement>(null);
   const [replyToAuthor, setReplyToAuthor] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -101,15 +103,30 @@ export default function Newsletters() {
     const sender = senderLocal.trim();
     const replyTo = String(fd.get('reply_to_address') ?? '').trim();
     const useAuthorReplyTo = fd.get('reply_to_author') === 'on';
+    if (!name) {
+      setErr('Please add a name.');
+      return;
+    }
     if (name.length < 3) {
-      setErr('Newsletter name must be at least 3 characters.');
+      setErr('Invalid name, too short. Min lenght is 3 characters.');
+      return;
+    }
+    if (senderLocal && !/^[^\s@]+$/.test(senderLocal)) {
+      setErr('Sender must be a valid email prefix with no spaces.');
+      senderInputRef.current?.focus();
       return;
     }
     if (!inbound) {
       setErr('Inbound address is required.');
+      inboundInputRef.current?.focus();
       return;
     }
-    if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
+    if (!/^[^\s@]+$/.test(inboundLocal)) {
+      setErr('Inbound address must be a valid email prefix with no spaces.');
+      inboundInputRef.current?.focus();
+      return;
+    }
+    if (!useAuthorReplyTo && replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
       setErr('Invalid input, please add a valid email address.');
       return;
     }
@@ -131,7 +148,12 @@ export default function Newsletters() {
           setReplyToAuthor(false);
           setShowCreateForm(false);
         },
-        onError: (e) => setErr((e as Error).message),
+        onError: (e) => {
+          const message = (e as Error).message;
+          setErr(message);
+          if (/inbound[_ ]address/i.test(message)) inboundInputRef.current?.focus();
+          else if (/from_address|sender/i.test(message)) senderInputRef.current?.focus();
+        },
       },
     );
   }
@@ -181,7 +203,27 @@ export default function Newsletters() {
                       name="name"
                       required
                       minLength={3}
-                      onInvalid={() => setErr('Newsletter name must be at least 3 characters.')}
+                      onInvalid={(e) => {
+                        const message = e.currentTarget.value.trim()
+                          ? 'Invalid name, too short. Min lenght is 3 characters.'
+                          : 'Please add a name.';
+                        e.currentTarget.setCustomValidity(message);
+                        setErr(message);
+                      }}
+                      onInput={(e) => {
+                        const value = e.currentTarget.value.trim();
+                        const message = !value
+                          ? 'Please add a name.'
+                          : value.length < 3
+                            ? 'Invalid name, too short. Min lenght is 3 characters.'
+                            : '';
+                        e.currentTarget.setCustomValidity(message);
+                        setErr((current) =>
+                          current === 'Please add a name.' || current === 'Invalid name, too short. Min lenght is 3 characters.'
+                            ? null
+                            : current,
+                        );
+                      }}
                       placeholder="Weekly digest"
                       className={inputCls}
                     />
@@ -195,13 +237,20 @@ export default function Newsletters() {
                       onChange={setSenderLocal}
                       domain={domain}
                       placeholder={defaultSenderLocal || 'default'}
+                      inputRef={senderInputRef}
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-[45%_45%] gap-2 items-start">
                   <div className="min-w-0">
                     <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Inbound address</label>
-                    <LocalPartInput value={inboundLocal} onChange={setInboundLocal} domain={domain} placeholder="digest" />
+                    <LocalPartInput
+                      value={inboundLocal}
+                      onChange={setInboundLocal}
+                      domain={domain}
+                      placeholder="digest"
+                      inputRef={inboundInputRef}
+                    />
                   </div>
                   <div className="min-w-0 flex flex-col gap-2">
                     <div>
@@ -209,11 +258,11 @@ export default function Newsletters() {
                         Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
                       </label>
                       <input
-                        type="email"
+                        type="text"
+                        inputMode="email"
                         name="reply_to_address"
                         disabled={replyToAuthor}
                         placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
-                        onInvalid={() => setErr('Invalid input, please add a valid email address.')}
                         className={inputCls}
                       />
                     </div>
@@ -475,12 +524,14 @@ export function LocalPartInput({
   domain,
   placeholder,
   disabled,
+  inputRef,
 }: {
   value: string;
   onChange: (v: string) => void;
   domain: string;
   placeholder?: string;
   disabled?: boolean;
+  inputRef?: Ref<HTMLInputElement>;
 }) {
   return (
     <div
@@ -491,6 +542,7 @@ export function LocalPartInput({
       }`}
     >
       <input
+        ref={inputRef}
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value.replace(/@.*$/, '').trimStart())}

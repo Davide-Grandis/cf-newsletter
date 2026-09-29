@@ -250,9 +250,15 @@ function Settings({
     }
     setError(null);
     const trimmedName = name.trim();
-    if (trimmedName !== n.name && trimmedName.length < 3) {
-      setError('Newsletter name must be at least 3 characters.');
-      return;
+    if (trimmedName !== n.name) {
+      if (!trimmedName) {
+        setError('Please add a name.');
+        return;
+      }
+      if (trimmedName.length < 3) {
+        setError('Invalid name, too short. Min lenght is 3 characters.');
+        return;
+      }
     }
     const replyTo = replyToAddress.trim();
     if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {

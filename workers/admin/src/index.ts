@@ -1032,8 +1032,8 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     }>();
     const nm = (name ?? '').trim();
     const addr = (inbound_address ?? '').trim().toLowerCase();
-    if (!nm) return Response.json({ error: 'name required' }, { status: 400 });
-    if (nm.length < 3) return Response.json({ error: 'name must be at least 3 characters' }, { status: 400 });
+    if (!nm) return Response.json({ error: 'Please add a name.' }, { status: 400 });
+    if (nm.length < 3) return Response.json({ error: 'Invalid name, too short. Min lenght is 3 characters.' }, { status: 400 });
     if (!addr || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
       return Response.json({ error: 'valid inbound_address required' }, { status: 400 });
     }
@@ -1260,9 +1260,9 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         const binds: unknown[] = [];
         if (typeof body.name === 'string') {
           const nm = body.name.trim();
-          if (!nm) return Response.json({ error: 'name cannot be empty' }, { status: 400 });
+          if (!nm) return Response.json({ error: 'Please add a name.' }, { status: 400 });
           if (nm.length < 3) {
-            return Response.json({ error: 'name must be at least 3 characters' }, { status: 400 });
+            return Response.json({ error: 'Invalid name, too short. Min lenght is 3 characters.' }, { status: 400 });
           }
           // Reject a rename that collides with another newsletter's name
           // (case-insensitive); the newsletter itself is excluded.
