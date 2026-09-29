@@ -1,0 +1,23 @@
+web/src/pages/NewsletterDetail.tsx
+  s_f613c4e46820e1::t_40ef9827fffd8f 252-256,259,264,284
+web/src/pages/Newsletters.tsx
+  s_f613c4e46820e1::t_7c692966baff4a 21,97,104-111,113,128,162-166,180-187,216,263
+workers/admin/src/index.ts
+  s_f613c4e46820e1::t_b71d3fd86abcbc 282,286,1036,1264-1266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b84e543030b40d67259a1926de5043d583ee2fcf",
+  "prompts": {},
+  "sessions": {
+    "s_f613c4e46820e1": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_f613c4e46820e1",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
