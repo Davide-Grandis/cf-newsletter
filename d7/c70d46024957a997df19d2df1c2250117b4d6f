@@ -1,0 +1,19 @@
+web/src/pages/Newsletters.tsx
+  s_4077962118f982::t_7d38e7b2a7b9d9 1,32,35-39,81-88,121,125,129,133,137,141,164-168,210,216,251-255,267-271,283,288-291
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d7c70d46024957a997df19d2df1c2250117b4d6f",
+  "prompts": {},
+  "sessions": {
+    "s_4077962118f982": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_4077962118f982",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
