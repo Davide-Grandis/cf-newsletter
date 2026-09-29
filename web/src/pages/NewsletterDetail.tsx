@@ -249,6 +249,11 @@ function Settings({
       return;
     }
     setError(null);
+    const replyTo = replyToAddress.trim();
+    if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
+      setError('Enter a valid Reply-To email address.');
+      return;
+    }
     try {
       await onSave({
         name: name.trim(),

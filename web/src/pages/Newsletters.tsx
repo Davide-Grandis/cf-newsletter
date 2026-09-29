@@ -100,6 +100,10 @@ export default function Newsletters() {
     const replyTo = String(fd.get('reply_to_address') ?? '').trim();
     const useAuthorReplyTo = fd.get('reply_to_author') === 'on';
     if (!name || !inbound) return;
+    if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
+      setErr('Enter a valid Reply-To email address.');
+      return;
+    }
     const form = e.currentTarget;
     create.mutate(
       {
@@ -154,7 +158,7 @@ export default function Newsletters() {
         >
           {showCreateForm ? (
             <form onSubmit={onCreate} className="flex flex-col gap-3 md:flex-row md:items-start">
-              <div className="min-w-0 flex-1 flex flex-col gap-2">
+              <div className="min-w-0 flex-1 flex flex-col gap-4">
                 <div className="grid grid-cols-1 md:grid-cols-[45%_45%] gap-2 items-end">
                   <div className="min-w-0">
                     <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Name</label>
@@ -187,6 +191,7 @@ export default function Newsletters() {
                         name="reply_to_address"
                         disabled={replyToAuthor}
                         placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
+                        onInvalid={() => setErr('Enter a valid Reply-To email address.')}
                         className={inputCls}
                       />
                     </div>
