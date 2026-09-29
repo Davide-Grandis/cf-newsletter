@@ -147,51 +147,61 @@ export default function Newsletters() {
       )}
 
       {canCreate && (
-        <div className="bg-white border border-slate-200 rounded p-3 dark:bg-slate-900 dark:border-slate-800">
+        <div
+          className={`rounded border p-3 bg-white dark:bg-slate-900 ${
+            showCreateForm ? 'border-orange-500 dark:border-orange-400' : 'border-slate-200 dark:border-slate-800'
+          }`}
+        >
           {showCreateForm ? (
             <form onSubmit={onCreate} className="flex flex-col gap-3 md:flex-row md:items-start">
-              <div className="min-w-0 flex-1 flex flex-wrap items-end gap-2">
-                <div className="flex-1 min-w-[160px]">
-                  <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Name</label>
-                  <input name="name" required placeholder="Weekly digest" className={inputCls} />
+              <div className="min-w-0 flex-1 flex flex-col gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-end">
+                  <div className="min-w-0">
+                    <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Name</label>
+                    <input name="name" required placeholder="Weekly digest" className={inputCls} />
+                  </div>
+                  <div className="min-w-0">
+                    <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Sender <span className="normal-case tracking-normal text-slate-400">(defaults to "newsletter")</span>
+                    </label>
+                    <LocalPartInput
+                      value={senderLocal}
+                      onChange={setSenderLocal}
+                      domain={domain}
+                      placeholder={defaultSenderLocal || 'default'}
+                    />
+                  </div>
                 </div>
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Inbound address</label>
-                  <LocalPartInput value={inboundLocal} onChange={setInboundLocal} domain={domain} placeholder="digest" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-end">
+                  <div className="min-w-0">
+                    <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Inbound address</label>
+                    <LocalPartInput value={inboundLocal} onChange={setInboundLocal} domain={domain} placeholder="digest" />
+                  </div>
+                  <div className="min-w-0 flex flex-col gap-2">
+                    <div>
+                      <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+                      </label>
+                      <input
+                        type="email"
+                        name="reply_to_address"
+                        disabled={replyToAuthor}
+                        placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
+                        className={inputCls}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        name="reply_to_author"
+                        checked={replyToAuthor}
+                        onChange={(e) => setReplyToAuthor(e.target.checked)}
+                      />
+                      Use campaign author’s email for replies
+                    </label>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Sender <span className="normal-case tracking-normal text-slate-400">(optional)</span>
-                  </label>
-                  <LocalPartInput
-                    value={senderLocal}
-                    onChange={setSenderLocal}
-                    domain={domain}
-                    placeholder={defaultSenderLocal || 'default'}
-                  />
-                </div>
-                <div className="flex-1 min-w-[220px]">
-                  <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
-                  </label>
-                  <input
-                    type="email"
-                    name="reply_to_address"
-                    disabled={replyToAuthor}
-                    placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
-                    className={inputCls}
-                  />
-                </div>
-                <label className="flex items-center gap-2 py-1 text-sm text-slate-600 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    name="reply_to_author"
-                    checked={replyToAuthor}
-                    onChange={(e) => setReplyToAuthor(e.target.checked)}
-                  />
-                  Use campaign author’s email for replies
-                </label>
-                {err && <div className="basis-full text-xs text-red-600">{err}</div>}
+                {err && <div className="text-xs text-red-600">{err}</div>}
               </div>
               <div className="flex flex-col gap-2 md:w-28">
                 <button
