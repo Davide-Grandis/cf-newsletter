@@ -155,7 +155,7 @@ export default function Newsletters() {
           {showCreateForm ? (
             <form onSubmit={onCreate} className="flex flex-col gap-3 md:flex-row md:items-start">
               <div className="min-w-0 flex-1 flex flex-col gap-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-[45%_45%] gap-2 items-end">
                   <div className="min-w-0">
                     <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Name</label>
                     <input name="name" required placeholder="Weekly digest" className={inputCls} />
@@ -172,7 +172,7 @@ export default function Newsletters() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-[45%_45%] gap-2 items-start">
                   <div className="min-w-0">
                     <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Inbound address</label>
                     <LocalPartInput value={inboundLocal} onChange={setInboundLocal} domain={domain} placeholder="digest" />
