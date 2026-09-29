@@ -1,0 +1,25 @@
+web/src/api.ts
+  s_e46d92fe5118a1::t_593dc35ec52bc8 82
+web/src/pages/NewsletterDetail.tsx
+  s_e46d92fe5118a1::t_367cc532d891db 3-4,17,21-22,37,73-85,91-97,109-110,112,114-117,119-139,164-183
+web/src/pages/Newsletters.tsx
+  s_e46d92fe5118a1::t_5e84823fea0f9d 3,20-21,51-62
+workers/admin/src/index.ts
+  s_e46d92fe5118a1::t_8a992ac3caa45b 1239-1240,1422-1446
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bf4464b547a9ef3ca22ba7fda38ab36028786715",
+  "prompts": {},
+  "sessions": {
+    "s_e46d92fe5118a1": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "mousy-soda",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
