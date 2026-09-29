@@ -1061,15 +1061,26 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     const id = crypto.randomUUID();
     // Auto-derive a unique public slug from the name (editable later). Public
     // signup itself stays off (allow_public_signup defaults to 0).
-    const slug = await uniqueSlug(env, nm);
-    try {
-      await env.DB
+    const [slug, routingLookup] = await Promise.all([uniqueSlug(env, nm), lookupRoutingRule(env, addr)]);
+    const statements = [
+      env.DB
         .prepare(
           'INSERT INTO newsletters (id, name, inbound_address, from_address, reply_to_address, reply_to_author, footer_html, footer_text, slug, enabled) ' +
             'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
         )
-        .bind(id, nm, addr, from, replyTo.value, reply_to_author === true ? 1 : 0, fh.value, ft.value, slug)
-        .run();
+        .bind(id, nm, addr, from, replyTo.value, reply_to_author === true ? 1 : 0, fh.value, ft.value, slug),
+    ];
+    // Keep the ">= 1 admin per newsletter" invariant: an admin who creates a
+    // newsletter (via the toggle) is auto-assigned to it. Super admins assign
+    // admins explicitly via the user-management API. TODO(step 4): require at
+    // least one admin assignment when a super_admin creates a newsletter.
+    if (!isSuper) {
+      statements.push(
+        env.DB.prepare('INSERT OR IGNORE INTO admins_newsletters (email, newsletter_id) VALUES (?, ?)').bind(auth.email, id),
+      );
+    }
+    try {
+      await env.DB.batch(statements);
     } catch (err) {
       const msg = (err as Error).message;
       if (/UNIQUE/i.test(msg)) {
@@ -1079,17 +1090,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       }
       throw err;
     }
-    // Keep the ">= 1 admin per newsletter" invariant: an admin who creates a
-    // newsletter (via the toggle) is auto-assigned to it. Super admins assign
-    // admins explicitly via the user-management API. TODO(step 4): require at
-    // least one admin assignment when a super_admin creates a newsletter.
-    if (!isSuper) {
-      await env.DB
-        .prepare('INSERT OR IGNORE INTO admins_newsletters (email, newsletter_id) VALUES (?, ?)')
-        .bind(auth.email, id)
-        .run();
-    }
-    const routing_warning = await createRoutingRule(env, addr);
+    const routing_warning = await createRoutingRule(env, addr, routingLookup);
     return Response.json({
       id,
       name: nm,
@@ -2640,12 +2641,28 @@ async function findRoutingRuleId(env: Env, addr: string): Promise<string | null>
   }
 }
 
-async function createRoutingRule(env: Env, addr: string): Promise<string | undefined> {
+async function lookupRoutingRule(env: Env, addr: string): Promise<{ id: string | null; warning?: string }> {
   if (!routingReady(env)) {
-    return 'Email Routing not configured — add the rule manually (set CF_API_TOKEN + EMAIL_ROUTING_ZONE_ID to automate).';
+    return {
+      id: null,
+      warning: 'Email Routing not configured — add the rule manually (set CF_API_TOKEN + EMAIL_ROUTING_ZONE_ID to automate).',
+    };
   }
   try {
-    if (await findRoutingRuleId(env, addr)) return undefined; // already routed
+    return { id: await findRoutingRuleId(env, addr) };
+  } catch (e) {
+    return { id: null, warning: `Email Routing rule not created: ${(e as Error).message}` };
+  }
+}
+
+async function createRoutingRule(
+  env: Env,
+  addr: string,
+  lookup: { id: string | null; warning?: string },
+): Promise<string | undefined> {
+  if (lookup.warning) return lookup.warning;
+  if (lookup.id) return undefined;
+  try {
     await cfJson(env, routingRulesPath(env), { method: 'POST', body: ruleBody(env, addr) });
     return undefined;
   } catch (e) {
