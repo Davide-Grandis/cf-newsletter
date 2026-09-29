@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState, type Ref } from 'react';
+import { FormEvent, useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api, Newsletter } from '../api';
@@ -29,8 +29,14 @@ export default function Newsletters() {
   const inboundInputRef = useRef<HTMLInputElement>(null);
   const [senderLocal, setSenderLocal] = useState('');
   const senderInputRef = useRef<HTMLInputElement>(null);
+  const replyToInputRef = useRef<HTMLInputElement>(null);
   const [replyToAuthor, setReplyToAuthor] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useLayoutEffect(() => {
+    if (showCreateForm) nameInputRef.current?.setCustomValidity('Please add a name.');
+  }, [showCreateForm]);
 
   const [page, setPage] = useState(0);
   useEffect(() => {
@@ -72,6 +78,14 @@ export default function Newsletters() {
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
   }
 
+  function showInputError(input: HTMLInputElement | null, message: string) {
+    setErr(message);
+    if (!input) return;
+    input.setCustomValidity(message);
+    input.focus();
+    input.reportValidity();
+  }
+
   const create = useMutation({
     mutationFn: (body: { name: string; inbound_address: string; from_address?: string; reply_to_address?: string; reply_to_author: boolean }) =>
       api<{ routing_warning?: string }>('/api/newsletters', { method: 'POST', body: JSON.stringify(body) }),
@@ -104,30 +118,27 @@ export default function Newsletters() {
     const replyTo = String(fd.get('reply_to_address') ?? '').trim();
     const useAuthorReplyTo = fd.get('reply_to_author') === 'on';
     if (!name) {
-      setErr('Please add a name.');
+      showInputError(nameInputRef.current, 'Please add a name.');
       return;
     }
     if (name.length < 3) {
-      setErr('Invalid name, too short. Min lenght is 3 characters.');
+      showInputError(nameInputRef.current, 'Invalid name, too short. Min lenght is 3 characters.');
       return;
     }
     if (senderLocal && !/^[^\s@]+$/.test(senderLocal)) {
-      setErr('Sender must be a valid email prefix with no spaces.');
-      senderInputRef.current?.focus();
+      showInputError(senderInputRef.current, 'Sender must be a valid email prefix with no spaces.');
       return;
     }
     if (!inbound) {
-      setErr('Inbound address is required.');
-      inboundInputRef.current?.focus();
+      showInputError(inboundInputRef.current, 'Inbound address is required.');
       return;
     }
     if (!/^[^\s@]+$/.test(inboundLocal)) {
-      setErr('Inbound address must be a valid email prefix with no spaces.');
-      inboundInputRef.current?.focus();
+      showInputError(inboundInputRef.current, 'Inbound address must be a valid email prefix with no spaces.');
       return;
     }
     if (!useAuthorReplyTo && replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
-      setErr('Invalid input, please add a valid email address.');
+      showInputError(replyToInputRef.current, 'Invalid input, please add a valid email address.');
       return;
     }
     const form = e.currentTarget;
@@ -150,9 +161,11 @@ export default function Newsletters() {
         },
         onError: (e) => {
           const message = (e as Error).message;
-          setErr(message);
-          if (/inbound[_ ]address/i.test(message)) inboundInputRef.current?.focus();
-          else if (/from_address|sender/i.test(message)) senderInputRef.current?.focus();
+          if (/inbound[_ ]address/i.test(message)) showInputError(inboundInputRef.current, message);
+          else if (/from_address|sender/i.test(message)) showInputError(senderInputRef.current, message);
+          else if (/reply[_ -]?to|email address/i.test(message)) showInputError(replyToInputRef.current, message);
+          else if (/name/i.test(message)) showInputError(nameInputRef.current, message);
+          else setErr(message);
         },
       },
     );
@@ -194,12 +207,13 @@ export default function Newsletters() {
           }`}
         >
           {showCreateForm ? (
-            <form onSubmit={onCreate} className="flex flex-col gap-3 md:flex-row md:items-start">
+            <form noValidate onSubmit={onCreate} className="flex flex-col gap-3 md:flex-row md:items-start">
               <div className="min-w-0 flex-1 flex flex-col gap-4">
                 <div className="grid grid-cols-1 md:grid-cols-[45%_45%] gap-2 items-end">
                   <div className="min-w-0">
                     <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Name</label>
                     <input
+                      ref={nameInputRef}
                       name="name"
                       required
                       minLength={3}
@@ -234,7 +248,11 @@ export default function Newsletters() {
                     </label>
                     <LocalPartInput
                       value={senderLocal}
-                      onChange={setSenderLocal}
+                      onChange={(value) => {
+                        setSenderLocal(value);
+                        senderInputRef.current?.setCustomValidity('');
+                        setErr((current) => /sender|from_address/i.test(current ?? '') ? null : current);
+                      }}
                       domain={domain}
                       placeholder={defaultSenderLocal || 'default'}
                       inputRef={senderInputRef}
@@ -246,7 +264,11 @@ export default function Newsletters() {
                     <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Inbound address</label>
                     <LocalPartInput
                       value={inboundLocal}
-                      onChange={setInboundLocal}
+                      onChange={(value) => {
+                        setInboundLocal(value);
+                        inboundInputRef.current?.setCustomValidity('');
+                        setErr((current) => /inbound[_ ]address/i.test(current ?? '') ? null : current);
+                      }}
                       domain={domain}
                       placeholder="digest"
                       inputRef={inboundInputRef}
@@ -258,10 +280,15 @@ export default function Newsletters() {
                         Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
                       </label>
                       <input
+                        ref={replyToInputRef}
                         type="text"
                         inputMode="email"
                         name="reply_to_address"
                         disabled={replyToAuthor}
+                        onChange={(e) => {
+                          e.currentTarget.setCustomValidity('');
+                          setErr((current) => /reply[_ -]?to|email address/i.test(current ?? '') ? null : current);
+                        }}
                         placeholder={replyToAuthor ? 'Using campaign author' : 'replies@example.com'}
                         className={inputCls}
                       />
