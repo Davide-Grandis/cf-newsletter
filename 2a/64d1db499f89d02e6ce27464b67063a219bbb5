@@ -1,0 +1,19 @@
+web/src/pages/NewsletterDetail.tsx
+  s_6e99960982294f::t_81b4e03b1586b1 101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2a64d1db499f89d02e6ce27464b67063a219bbb5",
+  "prompts": {},
+  "sessions": {
+    "s_6e99960982294f": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_6e99960982294f",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
