@@ -1,0 +1,29 @@
+web/src/api.ts
+  s_f27a855936ffcb::t_7b6f492d048803 7-21,26-28
+web/src/auth.tsx
+  s_f27a855936ffcb::t_0c0e05aea487d5 6,49
+web/src/pages/Authors.tsx
+  s_f27a855936ffcb::t_943c1b7cf1a726 3,66
+web/src/pages/Bounces.tsx
+  s_f27a855936ffcb::t_ebf3a50a6f90f5 4,29
+web/src/pages/Logs.tsx
+  s_f27a855936ffcb::t_2fbf4fd454c9e9 4,66
+web/src/pages/Subscribers.tsx
+  s_f27a855936ffcb::t_97dcd2d46389a4 3,107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cf2904ef4d5882b1d0b31ae15774ba8461f86954",
+  "prompts": {},
+  "sessions": {
+    "s_f27a855936ffcb": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_f27a855936ffcb",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
