@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Fragment, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { api, LogRow, Page } from '../api';
+import { api, fetchApi, LogRow, Page } from '../api';
 import { fmtDate, fmtUtc } from '../utils/date';
 import { Tooltip } from '../components/Tooltip';
 import { RefreshIcon } from './Dashboard';
@@ -63,7 +63,7 @@ export default function Logs() {
       if (q) sp.set('q', q);
       if (source) sp.set('source', source);
       if (level) sp.set('level', level);
-      const res = await fetch(`/api/logs/export?${sp.toString()}`);
+      const res = await fetchApi(`/api/logs/export?${sp.toString()}`);
       if (!res.ok) throw new Error(`export failed (${res.status})`);
       const blob = await res.blob();
       const href = URL.createObjectURL(blob);

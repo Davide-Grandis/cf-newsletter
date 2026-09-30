@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { api, BounceEvent, Page } from '../api';
+import { api, fetchApi, BounceEvent, Page } from '../api';
 import { RefreshIcon } from './Dashboard';
 import { fmtDate } from '../utils/date';
 import { Tooltip } from '../components/Tooltip';
@@ -26,7 +26,7 @@ export default function Bounces() {
   async function onExport() {
     setExporting(true);
     try {
-      const res = await fetch('/api/bounces/export');
+      const res = await fetchApi('/api/bounces/export');
       if (!res.ok) throw new Error(`export failed (${res.status})`);
       const blob = await res.blob();
       const href = URL.createObjectURL(blob);

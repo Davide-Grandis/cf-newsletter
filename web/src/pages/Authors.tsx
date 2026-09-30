@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { api, Author } from '../api';
+import { api, fetchApi, Author } from '../api';
 import { fmtDate } from '../utils/date';
 import { Tooltip } from '../components/Tooltip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -63,7 +63,7 @@ export default function Authors({
   async function onExport() {
     setExporting(true);
     try {
-      const res = await fetch(`${base}/export`);
+      const res = await fetchApi(`${base}/export`);
       if (!res.ok) throw new Error(`export failed (${res.status})`);
       const blob = await res.blob();
       const href = URL.createObjectURL(blob);

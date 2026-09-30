@@ -3,6 +3,7 @@
 // `/api/me` (and a logout helper that ends the Access session).
 
 import { useQuery } from '@tanstack/react-query';
+import { api } from './api';
 
 export type Role = 'super_admin' | 'admin';
 export type Capability = 'read_only' | 'edit';
@@ -45,7 +46,7 @@ export interface Identity {
 export function useIdentity() {
   return useQuery({
     queryKey: ['me'],
-    queryFn: () => fetch('/api/me').then((r) => r.json() as Promise<Identity>),
+    queryFn: () => api<Identity>('/api/me'),
     staleTime: 5 * 60_000,
   });
 }

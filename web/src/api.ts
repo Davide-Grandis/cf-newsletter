@@ -4,18 +4,28 @@
 // `Cf-Access-Authenticated-User-Email` header that Access injects after a
 // successful login. No bearer token is involved.
 
+export async function fetchApi(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set('X-Requested-With', 'XMLHttpRequest');
+  const res = await fetch(path, { ...init, headers });
+  if (res.status === 401) {
+    if (!sessionStorage.getItem('access-reload-attempted')) {
+      sessionStorage.setItem('access-reload-attempted', 'true');
+      window.location.reload();
+    }
+    throw new ApiError('unauthorized', 401);
+  }
+  sessionStorage.removeItem('access-reload-attempted');
+  return res;
+}
+
 export async function api<T = unknown>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers ?? {}),
-    },
-  });
-  if (res.status === 401) throw new ApiError('unauthorized', 401);
+  const headers = new Headers(init.headers);
+  headers.set('Content-Type', 'application/json');
+  const res = await fetchApi(path, { ...init, headers });
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
     let details: Record<string, string> | undefined;

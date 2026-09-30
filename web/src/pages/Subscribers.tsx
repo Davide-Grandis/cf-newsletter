@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, Page, Subscriber } from '../api';
+import { api, fetchApi, Page, Subscriber } from '../api';
 import { SortIcon } from './Newsletters';
 import { Tooltip } from '../components/Tooltip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -104,7 +104,7 @@ export default function Subscribers({
       if (verified) sp.set('verified', verified);
       if (bounces) sp.set('bounces', bounces);
       if (q) sp.set('q', q);
-      const res = await fetch(`${base}/export?${sp.toString()}`);
+      const res = await fetchApi(`${base}/export?${sp.toString()}`);
       if (!res.ok) throw new Error(`export failed (${res.status})`);
       const blob = await res.blob();
       const href = URL.createObjectURL(blob);
