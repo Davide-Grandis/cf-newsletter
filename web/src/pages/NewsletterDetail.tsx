@@ -100,7 +100,7 @@ export default function NewsletterDetail() {
     <div className="space-y-6">
       <div className="-mb-5">
         <Link to="/newsletters" className="text-sm text-slate-500 hover:underline dark:text-slate-400">← Newsletters</Link>
-        <div className="flex items-center gap-2 mt-1 py-1">
+        <div className="flex items-center gap-2 mt-1 pt-1 pb-[0.35rem]">
           <h1 className="text-xl font-semibold">{n.name}</h1>
           {canEdit && !editingSettings && (
             <>
