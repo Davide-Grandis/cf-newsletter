@@ -1,0 +1,19 @@
+web/src/pages/NewsletterDetail.tsx
+  s_e46d92fe5118a1::t_36008f2dca4ff4 103,129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8522157e01058a3a6698710c14c53d92a20f4641",
+  "prompts": {},
+  "sessions": {
+    "s_e46d92fe5118a1": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "mousy-soda",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
