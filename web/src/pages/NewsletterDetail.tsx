@@ -98,7 +98,7 @@ export default function NewsletterDetail() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="-mb-5">
         <Link to="/newsletters" className="text-sm text-slate-500 hover:underline dark:text-slate-400">← Newsletters</Link>
         <div className="flex items-center gap-2 mt-1 py-1">
           <h1 className="text-xl font-semibold">{n.name}</h1>
