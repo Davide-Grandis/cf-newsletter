@@ -100,7 +100,7 @@ export default function NewsletterDetail() {
     <div className="space-y-6">
       <div>
         <Link to="/newsletters" className="text-sm text-slate-500 hover:underline dark:text-slate-400">← Newsletters</Link>
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex items-center gap-2 mt-1 py-1">
           <h1 className="text-xl font-semibold">{n.name}</h1>
           {canEdit && !editingSettings && (
             <>
@@ -126,7 +126,7 @@ export default function NewsletterDetail() {
                       setDeleteError(null);
                       setConfirmDelete(true);
                     }}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-red-300 text-red-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-300 text-red-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-red-400"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M3 6h18" />
