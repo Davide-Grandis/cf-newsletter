@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, fetchApi, Setting } from '../api';
-import { useIdentity } from '../auth';
+import { useIdentity, type Identity } from '../auth';
 import SuperAdmins from './SuperAdmins';
 import { localPart, LocalPartInput } from './Newsletters';
 
@@ -116,7 +116,7 @@ const TABS: Tab[] = [
   },
   {
     id: 'branding',
-    label: 'Branding',
+    label: 'App branding',
     sections: [],
   },
   {
@@ -274,16 +274,23 @@ function Branding({ color }: { color: string }) {
         const body = await res.json() as { error?: string };
         throw new Error(body.error ?? 'Could not save logo.');
       }
+      const { logo_url } = await res.json() as { logo_url?: string };
+      if (file && !logo_url) throw new Error('Could not load the saved logo.');
+      return file ? logo_url! : null;
     },
-    onSuccess: async () => {
+    onSuccess: async (url) => {
+      qc.setQueryData<Identity>(['me'], (current) => current && { ...current, branding_logo_url: url });
       setSelected(null);
       setFileError(null);
       await qc.invalidateQueries({ queryKey: ['me'] });
     },
+    onError: () => setSelected(null),
   });
 
   const validColor = /^#[0-9a-fA-F]{6}$/.test(draftColor);
-  const logoUrl = previewUrl ?? me.data?.branding_logo_url;
+  const logoUrl = logo.variables === null && logo.isPending
+    ? null
+    : previewUrl ?? me.data?.branding_logo_url;
   return (
     <div className="space-y-6">
       <section className="border border-slate-200 rounded-lg dark:border-slate-700 overflow-hidden">
@@ -293,37 +300,40 @@ function Branding({ color }: { color: string }) {
         </div>
         <div className="p-4 space-y-3">
           <div className="h-24 flex items-center rounded border border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-900">
-            {logoUrl ? <img src={logoUrl} alt="Logo preview" className="max-h-20 max-w-48 object-contain" /> : <span className="text-sm text-slate-500">No logo uploaded</span>}
+            {logoUrl ? <img src={logoUrl} alt="Logo preview" className="max-h-20 max-w-48 object-contain" /> : <span className="text-sm text-slate-500">(no logo)</span>}
           </div>
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            aria-label="Choose logo image"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = '';
-              if (!file) return;
-              if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-                setSelected(null);
-                setFileError('Choose a PNG, JPEG, or WebP image.');
-                return;
-              }
-              if (file.size > 256 * 1024) {
-                setSelected(null);
-                setFileError('Logo must be 256 KB or smaller.');
-                return;
-              }
-              setFileError(null);
-              setSelected(file);
-            }}
-            className="block max-w-full text-sm"
-          />
-          <div className="flex gap-2">
-            <button type="button" disabled={!selected || logo.isPending} onClick={() => selected && logo.mutate(selected)} className="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900">{logo.isPending ? 'Saving…' : 'Upload logo'}</button>
-            {me.data?.branding_logo_url && <button type="button" disabled={logo.isPending} onClick={() => logo.mutate(null)} className="rounded border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600">Remove logo</button>}
-          </div>
+          <label className={`inline-flex rounded border border-slate-300 px-3 py-1.5 text-sm focus-within:ring-2 focus-within:ring-slate-500 dark:border-slate-600 ${logo.isPending ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}>
+            Choose file
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              aria-label="Choose logo image"
+              disabled={logo.isPending}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+                  setSelected(null);
+                  setFileError('Choose a PNG, JPEG, or WebP image.');
+                  return;
+                }
+                if (file.size > 256 * 1024) {
+                  setSelected(null);
+                  setFileError('Logo must be 256 KB or smaller.');
+                  return;
+                }
+                setFileError(null);
+                setSelected(file);
+                logo.mutate(file);
+              }}
+              className="sr-only"
+            />
+          </label>
+          {me.data?.branding_logo_url && logoUrl && <button type="button" disabled={logo.isPending} onClick={() => logo.mutate(null)} className="rounded border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-40 dark:border-slate-600">Remove logo</button>}
+          {logo.isPending && <p role="status" className="text-sm text-slate-500">Saving logo…</p>}
           {(fileError || logo.error) && <p role="alert" className="text-sm text-red-600">{fileError ?? (logo.error as Error).message}</p>}
-          {logo.isSuccess && !selected && <p className="text-sm text-emerald-600">Logo updated.</p>}
+          {logo.isSuccess && !selected && !fileError && <p className="text-sm text-emerald-600">Logo updated.</p>}
         </div>
       </section>
       <section className="border border-slate-200 rounded-lg dark:border-slate-700 overflow-hidden">
@@ -479,7 +489,7 @@ export default function Settings() {
         <h1 className="text-xl font-semibold">Settings</h1>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800 mb-6">
+      <div className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800 mb-6">
         {TABS.map((t) => (
           <TabButton
             key={t.id}
