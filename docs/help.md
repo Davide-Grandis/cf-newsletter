@@ -66,8 +66,8 @@ the site key and enable **Turnstile bot protection**.
 
 ## Subscriber CSV import
 
-Use **Download template** in the newsletter's Subscribers tab to get a CSV
-with field explanations, generation date, program version, and column headers.
+Use **Template** in the newsletter's Subscribers tab to get a CSV
+with field explanations, a sample record, generation date, program version, and column headers.
 Lines beginning with `#` are ignored during import. The first non-comment line
 is the column header; recognised column names are matched regardless of order.
 
@@ -89,6 +89,8 @@ Example file:
 # Name: optional; subscriber display name
 # Verified: optional; True/False, 1/0 or yes/no (defaults to False)
 # Date subscribed: optional; UTC YYYY-MM-DD HH:MM:SS (defaults to import time)
+# Example record (not imported): alice@example.com,Alice,True,2026-05-01 09:00:00
+# Existing email addresses and duplicates in this file are skipped; subscribers are not overwritten
 # Generated at: 2026-10-04T12:00:00.000Z
 # cf-newsletter version: 2.3.0-rc.2
 Email,Name,Verified,Date subscribed

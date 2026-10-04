@@ -102,6 +102,7 @@ export default function Subscribers({
       '# Name: optional; subscriber display name',
       '# Verified: optional; True/False, 1/0 or yes/no (defaults to False)',
       '# Date subscribed: optional; UTC YYYY-MM-DD HH:MM:SS (defaults to import time)',
+      '# Example record (not imported): alice@example.com,Alice,True,2026-05-01 09:00:00',
       '# Existing email addresses and duplicates in this file are skipped; subscribers are not overwritten',
       `# Generated at: ${date.toISOString()}`,
       `# cf-newsletter version: ${import.meta.env.VITE_PRODUCT_VERSION}`,
@@ -182,7 +183,7 @@ export default function Subscribers({
           type="button"
           onClick={refresh}
           disabled={list.isFetching}
-          className="ml-auto text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
+          className="ml-auto w-32 shrink-0 text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
         >
           {list.isFetching ? 'Refreshing…' : 'Refresh'}
         </button>
@@ -191,7 +192,7 @@ export default function Subscribers({
             type="button"
             onClick={onExport}
             disabled={exporting}
-            className="text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
+            className="w-32 shrink-0 text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
           >
             {exporting ? 'Exporting…' : 'Export CSV'}
           </button>
@@ -201,12 +202,12 @@ export default function Subscribers({
             <button
               type="button"
               onClick={onDownloadTemplate}
-              className="text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
+              className="w-32 shrink-0 text-center text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
             >
-              Download template
+              Template
             </button>
             <Tooltip text="Append mode">
-              <label className="text-sm cursor-pointer bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800">
+              <label className="inline-flex w-32 shrink-0 cursor-pointer items-center justify-center text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800">
                 Import CSV
                 <input
                   type="file"
