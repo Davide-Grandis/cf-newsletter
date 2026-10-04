@@ -125,7 +125,7 @@ function Layout() {
             <HamburgerIcon />
           </button>
           <span className="font-semibold text-slate-900 dark:text-slate-100">
-            Newsletter Admin Console
+            Newsletter Console
           </span>
           <div className="ml-auto flex items-center gap-3 text-sm">
             {display && (
@@ -213,7 +213,7 @@ function NoAccess({ email }: { email: string | null }) {
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">No console access</h1>
         <p className="text-sm text-slate-600 dark:text-slate-300">
           {email ? <span className="font-medium">{email}</span> : 'Your account'} is signed in but has
-          not been granted access to the Newsletter Admin Console. Ask a super admin to add you.
+          not been granted access to the Newsletter Console. Ask a super admin to add you.
         </p>
       </div>
       <button

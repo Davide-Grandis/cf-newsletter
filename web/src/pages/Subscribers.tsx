@@ -183,7 +183,7 @@ export default function Subscribers({
           type="button"
           onClick={refresh}
           disabled={list.isFetching}
-          className="ml-auto w-32 shrink-0 text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
+          className="ml-auto w-[6.8rem] shrink-0 text-sm bg-white border border-slate-200 rounded px-2 py-1.5 hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
         >
           {list.isFetching ? 'Refreshing…' : 'Refresh'}
         </button>
@@ -192,7 +192,7 @@ export default function Subscribers({
             type="button"
             onClick={onExport}
             disabled={exporting}
-            className="w-32 shrink-0 text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
+            className="w-[6.8rem] shrink-0 text-sm bg-white border border-slate-200 rounded px-2 py-1.5 hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
           >
             {exporting ? 'Exporting…' : 'Export CSV'}
           </button>
@@ -202,12 +202,12 @@ export default function Subscribers({
             <button
               type="button"
               onClick={onDownloadTemplate}
-              className="w-32 shrink-0 text-center text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
+              className="w-[6.8rem] shrink-0 text-center text-sm bg-white border border-slate-200 rounded px-2 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
             >
               Template
             </button>
             <Tooltip text="Append mode">
-              <label className="inline-flex w-32 shrink-0 cursor-pointer items-center justify-center text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800">
+              <label className="inline-flex w-[6.8rem] shrink-0 cursor-pointer items-center justify-center text-sm bg-white border border-slate-200 rounded px-2 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800">
                 Import CSV
                 <input
                   type="file"
