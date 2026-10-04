@@ -102,6 +102,7 @@ export default function Subscribers({
       '# Name: optional; subscriber display name',
       '# Verified: optional; True/False, 1/0 or yes/no (defaults to False)',
       '# Date subscribed: optional; UTC YYYY-MM-DD HH:MM:SS (defaults to import time)',
+      '# Existing email addresses and duplicates in this file are skipped; subscribers are not overwritten',
       `# Generated at: ${date.toISOString()}`,
       `# cf-newsletter version: ${import.meta.env.VITE_PRODUCT_VERSION}`,
       'Email,Name,Verified,Date subscribed',
