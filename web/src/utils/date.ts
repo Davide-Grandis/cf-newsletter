@@ -13,7 +13,7 @@ function toDate(s: string): Date | null {
 export function fmtDate(s: string | null | undefined): string {
   if (!s) return '';
   const d = toDate(s);
-  if (!d) return s;
+  if (!d) return '';
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');

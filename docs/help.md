@@ -66,35 +66,38 @@ the site key and enable **Turnstile bot protection**.
 
 ## Subscriber CSV import
 
-Import is **position-based** and the **header row is always ignored** (the first
-line is skipped, whatever it contains). Each remaining row maps by column order:
+Use **Download template** in the newsletter's Subscribers tab to get a CSV
+with field explanations, generation date, program version, and column headers.
+Lines beginning with `#` are ignored during import. The first non-comment line
+is the column header; recognised column names are matched regardless of order.
 
-| Position | Field | Notes |
-| --- | --- | --- |
-| 1 | **email** | Required. Rows with an empty email are skipped. |
-| 2 | **verified** | `True`/`False` (also accepts `1`/`0`, `yes`/`no`). Anything else is treated as False. |
-| 3 | **date subscribed** | Optional. If blank, the current date/time is used. |
+| Field | Notes |
+| --- | --- |
+| **Email** | Required. Rows with an empty email are skipped. |
+| **Name** | Optional display name. |
+| **Verified** | Optional; `True`/`False`, `1`/`0`, or `yes`/`no`. Blank defaults to False. |
+| **Date subscribed** | Optional UTC timestamp (`YYYY-MM-DD HH:MM:SS`). Blank or absent defaults to the import time. |
 
-Notes:
-
-- The **name** field is *not* imported — imported subscribers have no name.
-- **Duplicates are skipped, not updated.** An email already present in the list
-  (case-insensitive), or repeated within the file, is counted as a duplicate. A
-  popup reports `Subscribers added: X` and `Duplicated: Y` when the import finishes.
+**Duplicates are skipped, not updated.** An email already present in the list
+(case-insensitive), or repeated within the file, is counted as a duplicate. A
+popup reports `Subscribers added: X` and `Duplicated: Y` when the import finishes.
 
 Example file:
 
 ```csv
-email,verified,date subscribed
-alice@example.com,True,2026-05-01 09:00:00
-bob@example.com,False,
-carol@example.com,1,2026-05-03
+# Email: required; unique subscriber email address
+# Name: optional; subscriber display name
+# Verified: optional; True/False, 1/0 or yes/no (defaults to False)
+# Date subscribed: optional; UTC YYYY-MM-DD HH:MM:SS (defaults to import time)
+# Generated at: 2026-10-04T12:00:00.000Z
+# cf-newsletter version: 2.3.0-rc.2
+Email,Name,Verified,Date subscribed
+alice@example.com,Alice,True,2026-05-01 09:00:00
+bob@example.com,,False,
 ```
 
-**Export** produces a CSV with a header row using the UI field names
-(`Email,Name,Verified,Status,Bounces,Date subscribed`) and honours the current
-status/search filters. Note the export column order differs from the import
-order, so an exported file is not a drop-in re-import.
+**Export** includes additional subscriber columns and honours the current
+status/search filters. Its named columns are recognised on re-import.
 
 ## Subscriber statuses
 

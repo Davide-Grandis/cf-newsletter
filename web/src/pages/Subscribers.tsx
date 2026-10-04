@@ -95,6 +95,27 @@ export default function Subscribers({
     onError: (e) => setVerifyError((e as Error).message),
   });
 
+  function onDownloadTemplate() {
+    const date = new Date();
+    const csv = [
+      '# Email: required; unique subscriber email address',
+      '# Name: optional; subscriber display name',
+      '# Verified: optional; True/False, 1/0 or yes/no (defaults to False)',
+      '# Date subscribed: optional; UTC YYYY-MM-DD HH:MM:SS (defaults to import time)',
+      `# Generated at: ${date.toISOString()}`,
+      `# cf-newsletter version: ${import.meta.env.VITE_PRODUCT_VERSION}`,
+      'Email,Name,Verified,Date subscribed',
+    ].join('\r\n') + '\r\n';
+    const href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = `subscribers-import-template-${date.toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+  }
+
   const [exporting, setExporting] = useState(false);
   async function onExport() {
     setExporting(true);
@@ -175,20 +196,29 @@ export default function Subscribers({
           </button>
         </Tooltip>
         {canEdit && (
-          <Tooltip text="Append mode">
-            <label className="text-sm cursor-pointer bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800">
-              Import CSV
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.currentTarget.files?.[0];
-                  if (f) upload.mutate(f);
-                }}
-              />
-            </label>
-          </Tooltip>
+          <>
+            <button
+              type="button"
+              onClick={onDownloadTemplate}
+              className="text-sm bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800"
+            >
+              Download template
+            </button>
+            <Tooltip text="Append mode">
+              <label className="text-sm cursor-pointer bg-white border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:hover:bg-slate-800">
+                Import CSV
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.currentTarget.files?.[0];
+                    if (f) upload.mutate(f);
+                  }}
+                />
+              </label>
+            </Tooltip>
+          </>
         )}
       </div>
 
@@ -267,7 +297,7 @@ export default function Subscribers({
                     <span>{s.bounce_count}</span>
                   </span>
                 </td>
-                <td className="p-2 pl-8 truncate">{fmtDate(s.subscribed_at)}</td>
+                <td className="p-2 pl-8 truncate">{fmtDate(s.subscribed_at) || '—'}</td>
                 <td className="p-2 text-right">
                   {canEdit && (
                     <div className="inline-flex items-center gap-1 justify-end">

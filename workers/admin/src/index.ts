@@ -1701,13 +1701,13 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         .bind(nid)
         .all<{ email: string }>();
       const seen = new Set((existing.results ?? []).map((r) => r.email.toLowerCase()));
-      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0 && !l.trimStart().startsWith('#'));
       const headerCols = splitCsvLine(lines[0] ?? '').map((c) => c.trim().toLowerCase());
       const fi = (name: string, fallback: number) => { const i = headerCols.indexOf(name); return i >= 0 ? i : fallback; };
       const eIdx = fi('email', 0);
       const nIdx = headerCols.indexOf('name');
       const vIdx = fi('verified', 1);
-      const dIdx = fi('date subscribed', 2);
+      const dIdx = headerCols.includes('email') ? headerCols.indexOf('date subscribed') : 2;
       let added = 0;
       let duplicated = 0;
       for (const line of lines.slice(1)) {
