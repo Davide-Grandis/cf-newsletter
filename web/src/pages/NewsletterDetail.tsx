@@ -473,6 +473,7 @@ function Settings({
                     onChange={(e) => {
                       setReplyToAuthor(e.target.checked);
                       if (e.target.checked) {
+                        setReplyToAddress('');
                         replyToInputRef.current?.setCustomValidity('');
                         setError((current) => /reply[_ -]?to|email address/i.test(current ?? '') ? null : current);
                       }
