@@ -302,35 +302,37 @@ function Branding({ color }: { color: string }) {
           <div className="h-24 flex items-center rounded border border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-900">
             {logoUrl ? <img src={logoUrl} alt="Logo preview" className="max-h-20 max-w-48 object-contain" /> : <span className="text-sm text-slate-500">(no logo)</span>}
           </div>
-          <label className={`inline-flex rounded border border-slate-300 px-3 py-1.5 text-sm focus-within:ring-2 focus-within:ring-slate-500 dark:border-slate-600 ${logo.isPending ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}>
-            Choose file
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              aria-label="Choose logo image"
-              disabled={logo.isPending}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = '';
-                if (!file) return;
-                if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-                  setSelected(null);
-                  setFileError('Choose a PNG, JPEG, or WebP image.');
-                  return;
-                }
-                if (file.size > 256 * 1024) {
-                  setSelected(null);
-                  setFileError('Logo must be 256 KB or smaller.');
-                  return;
-                }
-                setFileError(null);
-                setSelected(file);
-                logo.mutate(file);
-              }}
-              className="sr-only"
-            />
-          </label>
-          {me.data?.branding_logo_url && logoUrl && <button type="button" disabled={logo.isPending} onClick={() => logo.mutate(null)} className="rounded border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-40 dark:border-slate-600">Remove logo</button>}
+          <div className="flex flex-wrap gap-2">
+            <label className={`inline-flex w-32 shrink-0 items-center justify-center rounded border border-slate-300 px-3 py-1.5 text-sm focus-within:ring-2 focus-within:ring-slate-500 dark:border-slate-600 ${logo.isPending ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}>
+              Choose file...
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                aria-label="Choose logo image"
+                disabled={logo.isPending}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!file) return;
+                  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+                    setSelected(null);
+                    setFileError('Choose a PNG, JPEG, or WebP image.');
+                    return;
+                  }
+                  if (file.size > 256 * 1024) {
+                    setSelected(null);
+                    setFileError('Logo must be 256 KB or smaller.');
+                    return;
+                  }
+                  setFileError(null);
+                  setSelected(file);
+                  logo.mutate(file);
+                }}
+                className="sr-only"
+              />
+            </label>
+            {me.data?.branding_logo_url && logoUrl && <button type="button" disabled={logo.isPending} onClick={() => logo.mutate(null)} className="w-32 shrink-0 rounded border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-40 dark:border-slate-600">Remove logo</button>}
+          </div>
           {logo.isPending && <p role="status" className="text-sm text-slate-500">Saving logo…</p>}
           {(fileError || logo.error) && <p role="alert" className="text-sm text-red-600">{fileError ?? (logo.error as Error).message}</p>}
           {logo.isSuccess && !selected && !fileError && <p className="text-sm text-emerald-600">Logo updated.</p>}
@@ -347,9 +349,9 @@ function Branding({ color }: { color: string }) {
             <input aria-label="App name hex color" type="text" value={draftColor} placeholder="#2563eb" onChange={(e) => setDraftColor(e.target.value)} className="w-32 rounded border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-900" />
             <span className="font-semibold text-slate-900 dark:text-slate-100" style={validColor ? { color: draftColor } : undefined}>Newsletter Console</span>
           </div>
-          <div className="flex gap-2">
-            <button type="button" disabled={!validColor || draftColor === color || saveColor.isPending} onClick={() => saveColor.mutate(draftColor)} className="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900">{saveColor.isPending ? 'Saving…' : 'Save color'}</button>
-            {color && <button type="button" disabled={saveColor.isPending} onClick={() => saveColor.mutate(null)} className="rounded border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600">Reset to default</button>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={!validColor || draftColor === color || saveColor.isPending} onClick={() => saveColor.mutate(draftColor)} className="w-32 shrink-0 rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900">{saveColor.isPending ? 'Saving…' : 'Apply'}</button>
+            {color && <button type="button" disabled={saveColor.isPending} onClick={() => saveColor.mutate(null)} className="w-32 shrink-0 rounded border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-600">Reset</button>}
           </div>
           {draftColor && !validColor && <p role="alert" className="text-sm text-red-600">Enter a six-digit hex color (e.g. #2563eb).</p>}
           {saveColor.error && <p role="alert" className="text-sm text-red-600">{(saveColor.error as Error).message}</p>}
