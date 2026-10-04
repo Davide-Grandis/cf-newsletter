@@ -64,10 +64,19 @@ export interface Env {
   ACCESS_ACCOUNT_ID?: string; // resolved from settings (Zero Trust lists are account-scoped)
   ACCESS_LIST_ID?: string; // resolved from settings (Zero Trust Emails list id)
   ALLOW_ADMIN_NEWSLETTER_CRUD?: string; // 'true' | 'false' (settings toggle)
+  BRANDING_TEXT_COLOR?: string;
   // Used to email a newly added console user a heads-up. Best-effort: if the
   // binding or sender is missing, user creation still succeeds with a warning.
   SEND_EMAIL?: SendEmail; // Cloudflare Email Sending binding
   FROM_ADDRESS?: string; // resolved from settings — global sender identity
+}
+
+const BRANDING_LOGO_KEY = 'branding/logo';
+const MAX_BRANDING_LOGO_BYTES = 256 * 1024;
+
+async function brandingLogoUrl(bucket: R2Bucket): Promise<string | null> {
+  const logo = await bucket.head(BRANDING_LOGO_KEY);
+  return logo ? `/media/${BRANDING_LOGO_KEY}?v=${encodeURIComponent(logo.version)}` : null;
 }
 
 interface SubscriberPatch {
@@ -135,6 +144,8 @@ export default {
         email: rawEmail ?? null,
         name: name ?? null,
         theme,
+        branding_text_color: cfg.BRANDING_TEXT_COLOR ?? '',
+        branding_logo_url: await brandingLogoUrl(env.ASSETS_R2),
         role: auth?.role ?? null,
         newsletters,
         // Authenticated via Access but no role yet (system already bootstrapped).
@@ -225,6 +236,9 @@ function validateSetting(key: string, val: string): string | null {
     return /^\d+$/.test(val.trim()) && Number(val.trim()) > 0
       ? null
       : 'must be a positive integer';
+  }
+  if (key === 'BRANDING_TEXT_COLOR') {
+    return val === '' || /^#[0-9a-fA-F]{6}$/.test(val) ? null : 'must be a six-digit hex color (e.g. #2563eb)';
   }
   if (key === 'BASE_DOMAIN') {
     // The sending domain is required and must look like a hostname. Existence
@@ -492,6 +506,50 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
   }
 
   // -------- global runtime settings --------
+
+  if (p === '/api/branding/logo' && (m === 'PUT' || m === 'DELETE')) {
+    if (!isSuper) return forbidden();
+    if (m === 'DELETE') {
+      await rawEnv.ASSETS_R2.delete(BRANDING_LOGO_KEY);
+      return Response.json({ ok: true });
+    }
+    const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+    const declaredType = req.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+    if (!declaredType || !allowedTypes.has(declaredType)) {
+      return Response.json({ error: 'Use a PNG, JPEG, or WebP image.' }, { status: 400 });
+    }
+    if (Number(req.headers.get('content-length')) > MAX_BRANDING_LOGO_BYTES) {
+      return Response.json({ error: 'Logo must be 256 KB or smaller.' }, { status: 413 });
+    }
+    if (!req.body) return Response.json({ error: 'Image is required.' }, { status: 400 });
+    const reader = req.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BRANDING_LOGO_BYTES) {
+        await reader.cancel();
+        return Response.json({ error: 'Logo must be 256 KB or smaller.' }, { status: 413 });
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const isPng = size >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((b, i) => bytes[i] === b);
+    const isJpeg = size >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+    const isWebp = size >= 12 && String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP';
+    if (!((declaredType === 'image/png' && isPng) || (declaredType === 'image/jpeg' && isJpeg) || (declaredType === 'image/webp' && isWebp))) {
+      return Response.json({ error: 'Image content does not match its PNG, JPEG, or WebP type.' }, { status: 400 });
+    }
+    await rawEnv.ASSETS_R2.put(BRANDING_LOGO_KEY, bytes, { httpMetadata: { contentType: declaredType } });
+    return Response.json({ ok: true, logo_url: await brandingLogoUrl(rawEnv.ASSETS_R2) });
+  }
 
   // Returns every configurable key with its effective value and provenance so
   // the Settings page can show what is overridden vs. falling back to the

@@ -124,7 +124,13 @@ function Layout() {
           >
             <HamburgerIcon />
           </button>
-          <span className="font-semibold text-slate-900 dark:text-slate-100">
+          {me.data?.branding_logo_url && (
+            <img src={me.data.branding_logo_url} alt="" className="h-9 w-auto max-w-32 object-contain" />
+          )}
+          <span
+            className="font-semibold text-slate-900 dark:text-slate-100"
+            style={me.data?.branding_text_color ? { color: me.data.branding_text_color } : undefined}
+          >
             Newsletter Console
           </span>
           <div className="ml-auto flex items-center gap-3 text-sm">

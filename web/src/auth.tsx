@@ -13,6 +13,8 @@ export interface Identity {
   name: string | null;
   // Stored UI theme preference, or null when the admin has no saved row yet.
   theme: 'light' | 'dark' | null;
+  branding_text_color: string;
+  branding_logo_url: string | null;
   // Authorization context (see the admin worker). `role` is null when the user
   // authenticated through Access but has not been provisioned in the console.
   role: Role | null;

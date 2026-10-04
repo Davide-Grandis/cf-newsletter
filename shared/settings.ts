@@ -32,6 +32,7 @@ export const SETTING_KEYS = [
   // (Managing admins is no longer a global setting — it is governed per-admin
   // by the read-only/edit capability.)
   'ALLOW_ADMIN_NEWSLETTER_CRUD',
+  'BRANDING_TEXT_COLOR',
   // -- Sending identity --
   'FROM_ADDRESS',
   'TRACKING_BASE_URL',
@@ -106,6 +107,7 @@ export const SETTINGS_DEFAULTS: Record<SettingKey, string> = {
   ACCESS_ACCOUNT_ID: '',
   ACCESS_LIST_ID: '',
   ALLOW_ADMIN_NEWSLETTER_CRUD: 'false',
+  BRANDING_TEXT_COLOR: '',
   FROM_ADDRESS: 'console@yourdomain.com',
   TRACKING_BASE_URL: 'https://track.yourdomain.com',
   // Global default footer. Newsletters with an empty footer inherit these.
