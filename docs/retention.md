@@ -90,13 +90,8 @@ Key properties:
 
 ### Invocation
 
-The worker has no HTTP handler; it only exports `scheduled()`. The cron trigger
-is defined in `workers/cleanup/wrangler.toml`:
-
-```toml
-[triggers]
-crons = ["0 4 * * *"]
-```
+The worker has no HTTP handler; it only exports `scheduled()`. The hosted
+installer configures its daily `0 4 * * *` cron trigger.
 
 ---
 
@@ -168,6 +163,6 @@ worker.
 | --- | --- |
 | Cleanup logic (cron, deletion loop) | `workers/cleanup/src/index.ts` |
 | Schema: campaigns, sends, events, attachments | `db/schema.sql` |
-| Cron trigger declaration | `workers/cleanup/wrangler.toml` |
+| Cron trigger configuration | Hosted installer |
 | `RETENTION_DAYS` default and resolution | `shared/settings.ts` |
 | Settings UI | `web/src/pages/Settings.tsx` |

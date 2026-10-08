@@ -65,6 +65,7 @@ on-screen instructions. Existing data and configuration are preserved.
 
 ## Documentation
 
+- [`docs/deploy.md`](docs/deploy.md) — hosted installation and updates.
 - [`docs/help.md`](docs/help.md) — using the administration console.
 - [`docs/attachments.md`](docs/attachments.md) — attachment handling and secure downloads.
 - [`docs/tracking.md`](docs/tracking.md) — open and click tracking.

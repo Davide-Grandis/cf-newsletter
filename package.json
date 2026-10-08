@@ -6,14 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "npm ci --prefix web --progress=false && npm run build:web",
-    "deploy": "npm run deploy:all",
-    "install:cloudflare": "node scripts/install.mjs",
-    "install:cloudflare:dry-run": "node scripts/install.mjs --dry-run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build:web": "cd web && npm run build",
-    "deploy:admin": "npm run build:web && cd workers/admin && wrangler deploy",
-    "deploy:all": "npm run build:web && for w in ingest consumer tracker bounce cleanup admin; do (cd workers/$w && wrangler deploy) || exit 1; done",
-    "db:apply": "wrangler d1 execute newsletter_db --file=db/schema.sql"
+    "build:web": "cd web && npm run build"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260910.1",
