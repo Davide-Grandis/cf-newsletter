@@ -88,4 +88,4 @@ checks an unpublished development artifact without deploying anything.
 - [`docs/retention.md`](docs/retention.md) — data retention and cleanup.
 - [`docs/workers.md`](docs/workers.md) — component-level technical details.
 
-For implementation and system design details, see [Architecture](architecture.md).
+For implementation and system design details, see [Architecture](docs/architecture.md).
