@@ -1,0 +1,31 @@
+web/src/pages/Subscribers.tsx
+  s_2ea0b7058f4ce0::t_470d1056ce1641 186,195,205,210
+web/index.html
+  s_806574355fb590::t_b92f953ef6157a 8
+web/src/App.tsx
+  s_806574355fb590::t_f51f60b04c0a7c 128,216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "22097f9b5a5d4f41c2b4a248c78da17a06c96697",
+  "prompts": {},
+  "sessions": {
+    "s_2ea0b7058f4ce0": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "rogue-rise",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_806574355fb590": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_806574355fb590",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

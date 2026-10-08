@@ -1,0 +1,19 @@
+web/src/pages/Subscribers.tsx
+  s_2ea0b7058f4ce0::t_89953356f37dfe 105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "87ede09ac2bf2bf47594aa73a82fa487977034b2",
+  "prompts": {},
+  "sessions": {
+    "s_2ea0b7058f4ce0": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "rogue-rise",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

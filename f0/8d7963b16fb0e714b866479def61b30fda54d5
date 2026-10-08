@@ -1,0 +1,19 @@
+workers/admin/wrangler.toml.example
+  s_a880c15f31039d::t_c04d8aa7d3d385 49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f08d7963b16fb0e714b866479def61b30fda54d5",
+  "prompts": {},
+  "sessions": {
+    "s_a880c15f31039d": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_a880c15f31039d",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

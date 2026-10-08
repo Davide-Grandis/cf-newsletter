@@ -1,0 +1,19 @@
+web/src/pages/Newsletters.tsx
+  s_0ae62d5af93425::t_55fd860d95f724 30,118,150-233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9a1483bd5adc56cda903ce76b56b4725535127c9",
+  "prompts": {},
+  "sessions": {
+    "s_0ae62d5af93425": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "perfect-drum",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

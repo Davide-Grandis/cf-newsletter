@@ -1,0 +1,109 @@
+.gitignore
+  s_a4b3010890c058::t_b800fd90ad38c2 13
+README.md
+  s_13b0fca368259b::t_42159494825725 1,39,41-48,50-51,57,70-78
+package-lock.json
+  s_13b0fca368259b::t_b70f2a328d93a9 2-3,8-9,16,163-604,1298-1339
+package.json
+  s_13b0fca368259b::t_2b7c6ae15da2a5 2,4,9,14-25,29
+scripts/deploy.mjs
+  s_a4b3010890c058::t_dc9530611b3303 1-111
+web/package-lock.json
+  s_13b0fca368259b::t_f3f7cbeb7c1e0e 2-3,8-9,21,1402-1411,4512-4518
+web/package.json
+  s_13b0fca368259b::t_75f4d0479a247e 2,4,22
+web/src/App.tsx
+  s_a4b3010890c058::t_0f7e11c2404739 185,190,199-202
+web/src/auth.tsx
+  s_a4b3010890c058::t_3cdc5bdfe64f61 39-40
+web/tsconfig.json
+  s_13b0fca368259b::t_bba2d1674f9e7f 16
+web/vite.config.ts
+  s_a4b3010890c058::t_0cc86322b73cf4 3,8-11
+workers/admin/src/index.ts
+  s_a4b3010890c058::t_0bc7db0f1b415d 43,163,2537
+.github/workflows/release.yml
+  s_b13695549c4ef5::t_d94dbe6633278b 1-59
+architecture.md
+  s_b13695549c4ef5::t_505b9d2c2631bc 52,72,75,79,85,87,97
+db/migrate_bounce_classification.sql
+  s_b13695549c4ef5::t_22823e751a3a4a 4
+db/migrate_strip_event_prefix.sql
+  s_b13695549c4ef5::t_5f6f4482b6c343 4
+db/migrate_warmup_to_daily.sql
+  s_b13695549c4ef5::t_c495a0a83da36f 4
+db/reset.sql
+  s_b13695549c4ef5::t_ad68750da229b5 4-5
+docs/attachments.md
+  s_b13695549c4ef5::t_d8ae79a03496a0 18
+docs/authentication_users.md
+  s_b13695549c4ef5::t_dff256ed684dfc 1
+docs/deploy.md
+  s_b13695549c4ef5::t_66ed9e10edf0f2 21,24,26-27,30-32,50,59,69-70,78-79,89,91,161-166,178-179,197,222,240-241,266-267
+docs/help.md
+  s_b13695549c4ef5::t_76502bb3ca0855 1,64
+docs/retention.md
+  s_b13695549c4ef5::t_86a4e8cfaf8ffe 153
+docs/subscribe-unsubscribe.md
+  s_b13695549c4ef5::t_66ba56d4e630c1 139
+docs/workers.md
+  s_b13695549c4ef5::t_5af8e8628a61bd 196,444-445
+scripts/build-release.mjs
+  s_b13695549c4ef5::t_2105504ef5dfba 1-93
+scripts/build-release.test.mjs
+  s_b13695549c4ef5::t_01b8d8bea921b7 1-31
+scripts/deploy-admin.sh
+  s_b13695549c4ef5::t_9a27de4388218a 3,24,30-31
+scripts/install.mjs
+  s_b13695549c4ef5::t_c53878d9827ba1 14-15,17-32,164-199,202,206,208-209,211,213,215,224,245,250,292,300,308,337,341,348,355-356,360,373,395,405-408,414-415,429,434,438,444-445,448-456,482,487-489
+shared/settings.ts
+  s_b13695549c4ef5::t_792f243978acdf 100
+web/src/pages/Help.tsx
+  s_b13695549c4ef5::t_956cc896cd3997 67,151
+web/src/pages/Settings.tsx
+  s_b13695549c4ef5::t_2a750b5f17d6d7 196
+workers/admin/wrangler.toml.example
+  s_b13695549c4ef5::t_49c19b44e9b826 1-2,33,46
+workers/bounce/wrangler.toml.example
+  s_b13695549c4ef5::t_cb59d089de1063 1-2,15,20,28
+workers/cleanup/wrangler.toml.example
+  s_b13695549c4ef5::t_beac5c981d6a80 1-2,11,16
+workers/consumer/wrangler.toml.example
+  s_b13695549c4ef5::t_6c25499b7e6bef 1-2,24,29,38,41,46
+workers/ingest/wrangler.toml.example
+  s_b13695549c4ef5::t_f3eea8f469d25a 1-2,13,18,22,25
+workers/tracker/wrangler.toml.example
+  s_b13695549c4ef5::t_1247480019d09e 1-2,14,19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fef327ff04a377be9aff502586b6f5123cfc4217",
+  "prompts": {},
+  "sessions": {
+    "s_13b0fca368259b": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "fork-degree",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_a4b3010890c058": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "wheat-eagle",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_b13695549c4ef5": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_b13695549c4ef5",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

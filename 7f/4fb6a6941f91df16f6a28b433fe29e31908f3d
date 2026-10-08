@@ -1,0 +1,33 @@
+package-lock.json
+  s_0ae62d5af93425::t_4ea2435eb3a393 15,18,48-50,65-67,82-84,99-101,116-118,133-135,1366-1368,1375,1522-1524,1535-1539,1543-1545,1553,1556,1570
+package.json
+  s_0ae62d5af93425::t_896425f167599c 28,31
+web/src/pages/NewsletterDetail.tsx
+  s_a618c3c6dd0d3b::t_4d8176eaacb1ff 252-256
+web/src/pages/Newsletters.tsx
+  s_a618c3c6dd0d3b::t_88b8988d399cdc 103-106,161,194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7f4fb6a6941f91df16f6a28b433fe29e31908f3d",
+  "prompts": {},
+  "sessions": {
+    "s_0ae62d5af93425": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "perfect-drum",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    },
+    "s_a618c3c6dd0d3b": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_a618c3c6dd0d3b",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

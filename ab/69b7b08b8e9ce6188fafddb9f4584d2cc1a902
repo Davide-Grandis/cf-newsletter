@@ -1,0 +1,25 @@
+docs/help.md
+  s_960c7436902241::t_e6c7c03fbd1a35 69-83,88-96,99-100
+web/src/pages/Subscribers.tsx
+  s_960c7436902241::t_cc0d58fd06effd 98-118,199-221,300
+web/src/utils/date.ts
+  s_960c7436902241::t_d718a556483fdf 16
+workers/admin/src/index.ts
+  s_960c7436902241::t_a11214907feff2 1704,1710
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ab69b7b08b8e9ce6188fafddb9f4584d2cc1a902",
+  "prompts": {},
+  "sessions": {
+    "s_960c7436902241": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_960c7436902241",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

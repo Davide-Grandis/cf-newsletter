@@ -1,0 +1,19 @@
+web/src/pages/Settings.tsx
+  s_88779bfda0ca0b::t_f8c4abb764c5ba 4,119,277-279,281-282,287,291-293,303,305-334,336,492
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e8408d7ba23131773053e88abec0aad2a067737b",
+  "prompts": {},
+  "sessions": {
+    "s_88779bfda0ca0b": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_88779bfda0ca0b",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

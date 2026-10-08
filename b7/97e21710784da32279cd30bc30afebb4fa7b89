@@ -1,0 +1,23 @@
+scripts/install.mjs
+  s_6464a0ded54220::t_8028bf38887088 164-184,221-222,224,226-229,234-239,243,250-253,424-426,435-443,446,458,518
+shared/settings.ts
+  s_6464a0ded54220::t_fcbf3fc11eaa61 22,106
+workers/admin/src/index.ts
+  s_6464a0ded54220::t_60c12843e0ee13 588-591
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b797e21710784da32279cd30bc30afebb4fa7b89",
+  "prompts": {},
+  "sessions": {
+    "s_6464a0ded54220": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_6464a0ded54220",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

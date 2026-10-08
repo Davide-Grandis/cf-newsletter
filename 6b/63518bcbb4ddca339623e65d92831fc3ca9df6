@@ -1,0 +1,21 @@
+.gitignore
+  s_e5a08db0b7dba5::t_5bb82e854a4110 21
+docs/architecture.md
+  s_e5a08db0b7dba5::t_9fcabb6b14f7ec 224-226,228
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6b63518bcbb4ddca339623e65d92831fc3ca9df6",
+  "prompts": {},
+  "sessions": {
+    "s_e5a08db0b7dba5": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_e5a08db0b7dba5",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

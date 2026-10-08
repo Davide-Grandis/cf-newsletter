@@ -1,0 +1,19 @@
+web/src/pages/NewsletterDetail.tsx
+  s_e46d92fe5118a1::t_1fa24330758dc6 1,18,46,49,51-54,58,78-99,114-116,174-176,184-186,188,196,202-216,219,227-234,236,243-246,248-271,273-274,279-280,282,285-286,289,291-296,301-451,453,455-460,463-480
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6a2b256bf31d7404e35438df494c95d51b85f5ad",
+  "prompts": {},
+  "sessions": {
+    "s_e46d92fe5118a1": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "mousy-soda",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+web/src/pages/Settings.tsx
+  s_a3a435804b31a3::t_ddd35f7efd3106 305-335,352-354
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8b881847518fd3cc4b731e5a8bebf54e9530baac",
+  "prompts": {},
+  "sessions": {
+    "s_a3a435804b31a3": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_a3a435804b31a3",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

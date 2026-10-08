@@ -1,0 +1,19 @@
+web/src/pages/Newsletters.tsx
+  s_d44bb57f820d9b::t_34b7758377e8af 158,175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "45634d4c131d0571939a16b30daec2a1d36d1b99",
+  "prompts": {},
+  "sessions": {
+    "s_d44bb57f820d9b": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_d44bb57f820d9b",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}

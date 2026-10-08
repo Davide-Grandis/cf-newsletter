@@ -1,0 +1,19 @@
+README.md
+  s_0f1c874fba20c3::t_4d97e3afd1224a 68-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cbc1c5af78ca1396fea6a9cefedf439c9fbdcb24",
+  "prompts": {},
+  "sessions": {
+    "s_0f1c874fba20c3": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_0f1c874fba20c3",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
