@@ -1,5 +1,7 @@
 # cf-newsletter
 
+[![Latest release](https://img.shields.io/github/v/release/Davide-Grandis/cf-newsletter?display_name=tag&include_prereleases)](https://github.com/Davide-Grandis/cf-newsletter/releases)
+
 A self-hosted newsletter distribution solution for teams that want to author
 campaigns by email and manage multiple lists from a secure web console. It
 handles delivery, attachments, subscriptions, engagement tracking, bounces,
