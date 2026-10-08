@@ -199,7 +199,7 @@ export default {
       return await serveMedia(req, env, url);
     }
 
-    // SPA static assets (with SPA fallback configured in wrangler.toml).
+    // SPA static assets (with SPA fallback configured by the hosted installer).
     return env.ASSETS.fetch(req);
   },
 };

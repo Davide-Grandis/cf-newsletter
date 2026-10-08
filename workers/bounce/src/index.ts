@@ -11,7 +11,7 @@ export interface Env {
   SOFT_BOUNCE_WINDOW_DAYS: string;
 }
 
-// Cron period in minutes. Must match the schedule in wrangler.toml.
+// Interval in minutes used to calculate post-send checks.
 const CRON_PERIOD_MINUTES = 10;
 // Post-send delivery-failure syncs to run after a campaign sends.
 // 18 checks x 10 min ~= 3 hours of fast bounce coverage.

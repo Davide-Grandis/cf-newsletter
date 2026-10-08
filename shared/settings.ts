@@ -10,9 +10,9 @@
 // levels: D1 `settings` row -> built-in default below.
 //
 // `SETTINGS_DEFAULTS` is the single source of truth for every configurable
-// value; workers no longer declare these as `[vars]` in `wrangler.toml`.
-// (Secrets and bindings — signing keys, API tokens, D1/R2/queue bindings —
-// are NOT settings and still live in wrangler.)
+// value; workers do not declare these as deployment variables.
+// Secrets and bindings — signing keys, API tokens, D1/R2/queue bindings —
+// are NOT settings and are configured by the hosted installer.
 
 export const SETTING_KEYS = [
   // -- Deployment & routing (group B) --

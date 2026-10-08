@@ -88,10 +88,10 @@ Static media lives in the `cf-newsletter-admin` R2 bucket, bound as `ASSETS_R2`
 and served read-only under `/media/*`. The `/media/` prefix avoids colliding
 with the Vite-built SPA bundle. Because the whole worker sits behind Access,
 these objects are only reachable by authenticated operators. The bucket is
-EU-jurisdiction, so its binding in `workers/admin/wrangler.toml` declares
-`jurisdiction = "eu"`. Upload a file with (note the **`--remote`** flag —
-wrangler v4's `r2 object` commands default to the *local* simulator and will
-silently not touch the production bucket without it):
+bound by the hosted installer using the bucket's existing jurisdiction.
+For an EU-jurisdiction bucket, upload a file with (note the **`--remote`**
+flag — wrangler v4's `r2 object` commands default to the *local* simulator
+and will silently not touch the production bucket without it):
 
 ```bash
 wrangler r2 object put cf-newsletter-admin/header.png \
@@ -206,7 +206,7 @@ colour-scheme preference on first login (`GET /api/me` returns it,
 `PUT /api/preferences` updates it).
 
 For local UI development, run `cd web && npm run dev` (Vite proxies `/api/*`
-to `localhost:8787`, so run `wrangler dev` in `workers/admin/` in parallel).
+to `localhost:8787`, which requires a separate running admin API).
 
 ## Runtime configuration
 
