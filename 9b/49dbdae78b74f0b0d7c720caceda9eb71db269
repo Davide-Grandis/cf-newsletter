@@ -1,0 +1,27 @@
+docs/architecture.md
+  s_ee63deecff4c4d::t_94a86b55a0d7df 91-94,209
+docs/retention.md
+  s_ee63deecff4c4d::t_2bc4619ab19888 93-94,166
+shared/settings.ts
+  s_ee63deecff4c4d::t_badcfac58981f2 13-15
+workers/admin/src/index.ts
+  s_ee63deecff4c4d::t_20537ef6d7e968 202
+workers/bounce/src/index.ts
+  s_ee63deecff4c4d::t_ecbecb630b83da 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9b49dbdae78b74f0b0d7c720caceda9eb71db269",
+  "prompts": {},
+  "sessions": {
+    "s_ee63deecff4c4d": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "vigorous-magnolia",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
