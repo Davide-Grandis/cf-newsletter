@@ -585,6 +585,10 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         errors[key] = 'unknown setting';
         continue;
       }
+      if (key === 'DATA_LOCALITY') {
+        errors[key] = 'data locality is recorded by the installer and cannot be changed here';
+        continue;
+      }
       if (val === null) {
         toDelete.push(key);
         continue;

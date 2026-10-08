@@ -161,6 +161,27 @@ async function ensureCliResource(name, listArgs, createArgs) {
   wrangler(createArgs);
 }
 
+function readInstalledDataLocality() {
+  const databases = JSON.parse(wrangler(['d1', 'list', '--json'], { capture: true }));
+  if (!databases.some((item) => item.name === resources.database)) return null;
+  const rows = JSON.parse(wrangler(['d1', 'execute', resources.database, '--remote', '--command', "SELECT value FROM settings WHERE key = 'DATA_LOCALITY'", '--json'], { capture: true }));
+  const value = rows[0]?.results?.[0]?.value;
+  return value ? validate(value, /^(automatic|eu|us)$/, 'stored data locality') : null;
+}
+
+async function ensureQueue(name, locality) {
+  const output = dryRun ? '' : wrangler(['queues', 'list'], { capture: true });
+  if (!dryRun && containsResource(output, name)) {
+    status('reusing', name);
+    return;
+  }
+  status(dryRun ? 'would create' : 'creating', `${name} (${locality ?? 'automatic'})`);
+  await cf(`/accounts/${accountId}/queues`, {
+    method: 'POST',
+    body: { queue_name: name, ...(locality && locality !== 'automatic' ? { jurisdiction: locality } : {}) },
+  });
+}
+
 async function detectInstallation() {
   if (dryRun) return 'fresh';
   const databases = JSON.parse(wrangler(['d1', 'list', '--json'], { capture: true }));
@@ -197,32 +218,39 @@ async function detectInstallation() {
   return 'fresh';
 }
 
-async function ensureD1() {
-  if (dryRun) {
-    status('would ensure', `D1 ${resources.database}`);
-    return '00000000-0000-0000-0000-000000000000';
-  }
-  let databases = JSON.parse(wrangler(['d1', 'list', '--json'], { capture: true }));
+async function ensureD1(locality) {
+  let databases = dryRun ? [] : JSON.parse(wrangler(['d1', 'list', '--json'], { capture: true }));
   let database = databases.find((item) => item.name === resources.database);
+  const existing = Boolean(database);
   if (!database) {
-    status('creating', `D1 ${resources.database}`);
-    wrangler(['d1', 'create', resources.database, '--jurisdiction', 'eu']);
+    const selected = locality ?? 'eu';
+    status(dryRun ? 'would create' : 'creating', `D1 ${resources.database} (${selected})`);
+    wrangler(['d1', 'create', resources.database, ...(selected === 'automatic' ? [] : ['--jurisdiction', selected])]);
+    if (dryRun) return '00000000-0000-0000-0000-000000000000';
     databases = JSON.parse(wrangler(['d1', 'list', '--json'], { capture: true }));
     database = databases.find((item) => item.name === resources.database);
-  } else {
-    status('reusing', `D1 ${resources.database}`);
   }
   if (!database?.uuid) fail(`Could not resolve the ${resources.database} database ID.`);
+  if (locality) {
+    const details = await cf(`/accounts/${accountId}/d1/database/${database.uuid}`);
+    const actual = details.result?.jurisdiction ?? 'automatic';
+    if (actual !== locality) fail(`D1 uses ${actual}, not ${locality}; refusing to record inconsistent data locality.`);
+  }
+  status(existing ? 'reusing' : 'confirmed', `D1 ${resources.database}`);
   return database.uuid;
 }
 
-function generateConfigs(databaseId, domain) {
+function generateConfigs(databaseId, domain, archiveLocality, adminLocality) {
   for (const worker of workers) {
     const templatePath = join(root, 'workers', worker, 'wrangler.toml.example');
     const configPath = join(root, 'workers', worker, 'wrangler.toml');
     let content = readFileSync(templatePath, 'utf8').replaceAll('REPLACE_WITH_D1_ID', databaseId);
     content = content.replaceAll('REPLACE_WITH_ACCOUNT_ID', accountId);
     content = content.replaceAll('yourdomain.com', domain);
+    content = content.replace('jurisdiction = "eu"', adminLocality === 'automatic' ? '' : `jurisdiction = "${adminLocality}"`);
+    if (archiveLocality !== 'automatic') {
+      content = content.replace('bucket_name = "cf-newsletter-archive"', `bucket_name = "cf-newsletter-archive"\njurisdiction = "${archiveLocality}"`);
+    }
     status(dryRun ? 'would write' : 'writing', `workers/${worker}/wrangler.toml`);
     if (!dryRun) writeFileSync(configPath, content);
   }
@@ -393,6 +421,9 @@ async function main() {
   const zoneId = dryRun ? '00000000000000000000000000000000' : zones.result?.[0]?.id;
   if (!zoneId) fail(`Zone ${domain} was not found in account ${accountId}.`);
   const installation = await detectInstallation();
+  const dataLocality = installation === 'fresh'
+    ? validate((await prompt('Data locality for D1, R2, and Queues (automatic/eu/us)', 'eu')).toLowerCase(), /^(automatic|eu|us)$/, 'data locality')
+    : readInstalledDataLocality();
 
   step('Installing project dependencies');
   status(dryRun ? 'would install' : 'installing', 'Worker dependencies');
@@ -401,14 +432,18 @@ async function main() {
   run('npm', ['install'], { cwd: join(root, 'web') });
 
   step('Provisioning D1, Queues and R2');
-  const databaseId = await ensureD1();
-  await ensureCliResource(resources.queue, ['queues', 'list'], ['queues', 'create', resources.queue]);
-  await ensureCliResource(resources.deadLetterQueue, ['queues', 'list'], ['queues', 'create', resources.deadLetterQueue]);
-  await ensureCliResource(resources.archiveBucket, ['r2', 'bucket', 'list'], ['r2', 'bucket', 'create', resources.archiveBucket]);
-  await ensureCliResource(resources.adminBucket, ['r2', 'bucket', 'list', '--jurisdiction', 'eu'], ['r2', 'bucket', 'create', resources.adminBucket, '--jurisdiction', 'eu']);
+  const archiveLocality = dataLocality ?? 'automatic';
+  const adminLocality = dataLocality ?? 'eu';
+  const databaseId = await ensureD1(dataLocality);
+  await ensureQueue(resources.queue, dataLocality);
+  await ensureQueue(resources.deadLetterQueue, dataLocality);
+  const archiveJurisdiction = archiveLocality === 'automatic' ? [] : ['--jurisdiction', archiveLocality];
+  const adminJurisdiction = adminLocality === 'automatic' ? [] : ['--jurisdiction', adminLocality];
+  await ensureCliResource(resources.archiveBucket, ['r2', 'bucket', 'list', ...archiveJurisdiction], ['r2', 'bucket', 'create', resources.archiveBucket, ...archiveJurisdiction]);
+  await ensureCliResource(resources.adminBucket, ['r2', 'bucket', 'list', ...adminJurisdiction], ['r2', 'bucket', 'create', resources.adminBucket, ...adminJurisdiction]);
 
   step('Generating all six Worker configurations');
-  generateConfigs(databaseId, domain);
+  generateConfigs(databaseId, domain, archiveLocality, adminLocality);
 
   step('Applying the D1 schema');
   status('configuring', `${resources.database} schema`);
@@ -420,6 +455,7 @@ async function main() {
   await ensureAccessApplication(domain, accessListId);
 
   const settings = {
+    ...(dataLocality ? { DATA_LOCALITY: dataLocality } : {}),
     BASE_DOMAIN: domain,
     EMAIL_ROUTING_ZONE_ID: zoneId,
     ACCESS_ACCOUNT_ID: accountId,
@@ -479,7 +515,7 @@ async function main() {
   if (existsSync(join(root, 'docs', 'help.md'))) {
     status(dryRun ? 'would upload' : 'uploading', 'docs/help.md to R2');
     wrangler([
-      'r2', 'object', 'put', `${resources.adminBucket}/help.md`, '--jurisdiction', 'eu', '--remote',
+      'r2', 'object', 'put', `${resources.adminBucket}/help.md`, ...adminJurisdiction, '--remote',
       '--file', './docs/help.md', '--content-type', 'text/markdown',
     ]);
   }

@@ -19,6 +19,7 @@ export const SETTING_KEYS = [
   'EMAIL_ROUTING_ZONE_ID',
   'INGEST_WORKER_NAME',
   'BASE_DOMAIN',
+  'DATA_LOCALITY',
   // -- Access / user management --
   // The Cloudflare Zero Trust Emails list the admin worker keeps in sync as
   // console users are added/removed, plus the account it lives in. A Cloudflare
@@ -102,6 +103,7 @@ export const SETTINGS_DEFAULTS: Record<SettingKey, string> = {
   // No built-in default: the sending domain is deployment-specific and lives
   // only in the D1 `settings` table. Saving it auto-resolves EMAIL_ROUTING_ZONE_ID.
   BASE_DOMAIN: '',
+  DATA_LOCALITY: '',
   // Empty until the Zero Trust Emails list is provisioned; set from the Settings
   // page (Access tab) so console user management can sync list membership.
   ACCESS_ACCOUNT_ID: '',
