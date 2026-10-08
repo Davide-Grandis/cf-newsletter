@@ -1,0 +1,21 @@
+README.md
+  s_d9907cdcda1136::t_2bc21280e769b9 75
+package.json
+  s_d9907cdcda1136::t_31909e9df1392f 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7b0d43756f816043930a457c9e908357b1cd39f9",
+  "prompts": {},
+  "sessions": {
+    "s_d9907cdcda1136": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "pacific-medicine",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
