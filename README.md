@@ -72,11 +72,7 @@ before updating; preflight blocks legacy-only and incomplete installations.
 Product releases are tagged `vX.Y.Z` and include a verified, prebuilt
 `cf-newsletter-X.Y.Z.json` asset containing all six Workers, the admin SPA,
 schema, and migrations. The hosted installer discovers the latest stable GitHub
-Release when opened; its staging channel can select a prerelease. Build a
-release only from a clean commit whose tag matches the root `package.json`
-version with `npm run build:release`, then publish it with the manually triggered
-Product release GitHub Actions workflow. `npm run test:release` creates and
-checks an unpublished development artifact without deploying anything.
+Release when opened; its staging channel can select a prerelease.
 
 ## Documentation
 
