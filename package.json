@@ -4,14 +4,6 @@
   "version": "2.3.0-rc.3",
   "license": "MIT",
   "type": "module",
-  "scripts": {
-    "install:cloudflare": "node scripts/install.mjs",
-    "install:cloudflare:dry-run": "node scripts/install.mjs --dry-run",
-    "build:web": "cd web && npm run build"
-  },
-  "devDependencies": {
-    "wrangler": "^4.135.0"
-  },
   "dependencies": {
     "postal-mime": "^2.2.7"
   }

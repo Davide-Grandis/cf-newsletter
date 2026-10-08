@@ -46,7 +46,7 @@ binding = "ASSETS_R2"
 bucket_name = "cf-newsletter-admin"
 jurisdiction = "eu"
 
-# Static SPA built from /web is emitted to ./public by `npm run build:web`.
+# Static SPA assets are built into ./public by the private release tooling.
 [assets]
 directory = "./public"
 binding = "ASSETS"
