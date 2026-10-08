@@ -220,11 +220,12 @@ retention and bounce handling.
 ```
 newsletter/
 ├── README.md
-├── architecture.md
 ├── package.json
-├── tsconfig.json
+├── docs/
+│   ├── architecture.md
+│   └── help.md
 ├── workers/
-│   ├── ingest/      (src/index.ts, wrangler.toml.example)
+│   ├── ingest/      (src/index.ts)
 │   ├── consumer/
 │   ├── tracker/
 │   ├── bounce/

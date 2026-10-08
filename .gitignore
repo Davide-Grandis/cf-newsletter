@@ -18,6 +18,5 @@ db/migrations/
 # Local Google Doc stubs
 docs/*.gdoc
 
-# Deployment-specific worker config — copy wrangler.toml.example to
-# wrangler.toml and fill in your own IDs/hostnames. Templates stay tracked.
+# Deployment-specific worker configs and Wrangler templates stay in private tooling.
 workers/*/wrangler.toml
