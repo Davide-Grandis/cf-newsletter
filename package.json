@@ -5,29 +5,11 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "npm ci --prefix web --progress=false && npm run build:web",
-    "deploy": "node scripts/deploy.mjs all",
     "install:cloudflare": "node scripts/install.mjs",
     "install:cloudflare:dry-run": "node scripts/install.mjs --dry-run",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build:web": "cd web && npm run build",
-    "build:release": "node scripts/build-release.mjs",
-    "build:release:development": "node scripts/build-release.mjs --development",
-    "test:release": "npm run build:release:development && node --test scripts/build-release.test.mjs",
-    "deploy:check": "node scripts/deploy.mjs check",
-    "deploy:ingest": "node scripts/deploy.mjs ingest",
-    "deploy:consumer": "node scripts/deploy.mjs consumer",
-    "deploy:tracker": "node scripts/deploy.mjs tracker",
-    "deploy:bounce": "node scripts/deploy.mjs bounce",
-    "deploy:cleanup": "node scripts/deploy.mjs cleanup",
-    "deploy:admin": "node scripts/deploy.mjs admin",
-    "deploy:all": "node scripts/deploy.mjs all",
-    "db:apply": "node scripts/deploy.mjs db"
+    "build:web": "cd web && npm run build"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260918.1",
-    "esbuild": "0.28.2",
-    "typescript": "^5.5.4",
     "wrangler": "^4.135.0"
   },
   "dependencies": {
