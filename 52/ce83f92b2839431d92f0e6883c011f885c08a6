@@ -1,0 +1,19 @@
+README.md
+  s_50cf5419117a86::t_be609ff8f8532b 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "52ce83f92b2839431d92f0e6883c011f885c08a6",
+  "prompts": {},
+  "sessions": {
+    "s_50cf5419117a86": {
+      "agent_id": {
+        "tool": "devin",
+        "id": "s_50cf5419117a86",
+        "model": "unknown"
+      },
+      "human_author": "davideg <davideg@cloudflare.com>"
+    }
+  }
+}
