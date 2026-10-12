@@ -71,11 +71,6 @@ on-screen instructions. Existing `cf-newsletter-*` deployments keep their data
 and Worker secrets. Back up and manually migrate legacy `newsletter-*` resources
 before updating; preflight blocks legacy-only and incomplete installations.
 
-Product releases are tagged `vX.Y.Z` and include a verified, prebuilt
-`cf-newsletter-X.Y.Z.json` asset containing all six Workers, the admin SPA,
-schema, and migrations. The hosted installer discovers the latest stable GitHub
-Release when opened; its staging channel can select a prerelease.
-
 ## Documentation
 
 - [`docs/help.md`](docs/help.md) — using the administration console.
