@@ -33,7 +33,7 @@ independently managed.
 
 Before running the browser-based installer, the target Cloudflare account must have:
 
-- a domain added as an active Cloudflare authoritative DNS zone (primary/full setup);
+- a domain added as an active Cloudflare authoritative DNS zone (primary/full setup) without an existing email service/MX records;
 - Workers, D1, R2 and Queues available;
 - Email Sending and Email Routing available for the zone;
 - Zero Trust Access available.
