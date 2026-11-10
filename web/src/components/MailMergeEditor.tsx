@@ -178,9 +178,6 @@ export function MailMergeEditor({
           <pre className="mt-0.5 w-full h-[90px] overflow-auto border border-slate-200 rounded bg-slate-50 p-2 text-xs whitespace-pre-wrap font-mono text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-200">
             {renderMailMerge(text, sampleName, false)}
           </pre>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
-            Template previews use the sample name, even when mail merge is disabled. HTML is sanitized on save.
-          </p>
         </div>
       </div>
       {error && <p role="alert" className="text-xs text-red-600 mt-2">{error}</p>}
