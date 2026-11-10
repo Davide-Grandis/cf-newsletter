@@ -21,6 +21,7 @@ import {
 } from '../../../shared/warmup';
 import { buildEmail } from '../../../shared/mime';
 import { sanitizeFooterHtml } from '../../../shared/footer';
+import { sanitizeMailMergeHtml, MAIL_MERGE_HTML_MAX, MAIL_MERGE_TEXT_MAX } from '../../../shared/mail-merge';
 import {
   loadSettings,
   readStoredSettings,
@@ -1295,7 +1296,8 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       if (m === 'GET') {
         const row = await env.DB
           .prepare(
-            `SELECT n.id, n.name, n.inbound_address, n.from_address, n.reply_to_address, n.reply_to_author, n.footer_html, n.footer_text, n.slug, n.allow_public_signup, n.enabled, n.created_at, ` +
+            `SELECT n.id, n.name, n.inbound_address, n.from_address, n.reply_to_address, n.reply_to_author, n.footer_html, n.footer_text, ` +
+              `n.mail_merge_enabled, n.mail_merge_html, n.mail_merge_text, n.slug, n.allow_public_signup, n.enabled, n.created_at, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id) AS subscriber_count, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id AND s.status='active') AS active_count, ` +
               `(SELECT COUNT(*) FROM authors a WHERE a.newsletter_id = n.id) AS author_count, ` +
@@ -1317,6 +1319,9 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           reply_to_author?: unknown;
           footer_html?: string | null;
           footer_text?: string | null;
+          mail_merge_enabled?: unknown;
+          mail_merge_html?: unknown;
+          mail_merge_text?: unknown;
           slug?: string;
           allow_public_signup?: boolean;
         }>();
@@ -1388,6 +1393,26 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           if ('error' in ft) return Response.json({ error: ft.error }, { status: 400 });
           sets.push('footer_text = ?');
           binds.push(ft.value);
+        }
+        if ('mail_merge_enabled' in body) {
+          if (typeof body.mail_merge_enabled !== 'boolean') {
+            return Response.json({ error: 'mail_merge_enabled must be a boolean' }, { status: 400 });
+          }
+          sets.push('mail_merge_enabled = ?');
+          binds.push(body.mail_merge_enabled ? 1 : 0);
+        }
+        for (const field of ['mail_merge_html', 'mail_merge_text'] as const) {
+          if (!(field in body)) continue;
+          const value = body[field];
+          const max = field === 'mail_merge_html' ? MAIL_MERGE_HTML_MAX : MAIL_MERGE_TEXT_MAX;
+          if (value !== null && typeof value !== 'string') {
+            return Response.json({ error: `${field} must be a string or null` }, { status: 400 });
+          }
+          if (value && value.length > max) {
+            return Response.json({ error: `${field} too long (max ${max} chars)` }, { status: 400 });
+          }
+          sets.push(`${field} = ?`);
+          binds.push(value?.trim() ? field === 'mail_merge_html' ? sanitizeMailMergeHtml(value) : value : null);
         }
         // slug: the public subscribe identifier. An empty value re-derives a
         // unique slug from the (possibly just-renamed) name; a provided value is

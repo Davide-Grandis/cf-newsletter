@@ -16,6 +16,7 @@ import {
 } from '../../../shared/db';
 import { instrumentHtml, unsubscribeUrl, signDownloadUrl } from '../../../shared/tracking';
 import { resolveFooter, renderFooterHtml, renderFooterText } from '../../../shared/footer';
+import { applyMailMerge } from '../../../shared/mail-merge';
 import type { QueueMessage } from '../../../shared/types';
 import {
   readWarmupConfig,
@@ -205,6 +206,7 @@ export default {
           try {
             let html = await renderRecipientHtml(env, campaign, allAtts, r.subscriberId);
             let text = campaign.text ?? '';
+            ({ html, text } = applyMailMerge(campaign, r.name, html, text));
             const unsubUrl = unsubscribeUrl(env.TRACKING_BASE_URL, r.subscriberId, r.token, campaignId);
             // Append the footer AFTER tracking instrumentation so its
             // unsubscribe/author links are never click-rewritten. The footer is

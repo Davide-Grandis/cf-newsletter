@@ -8,8 +8,9 @@ import Subscribers from './Subscribers';
 import Authors from './Authors';
 import NewsletterAdmins from './NewsletterAdmins';
 import { LocalPartInput, localPart } from './Newsletters';
+import { MailMergeEditor, type MailMergeUpdate } from '../components/MailMergeEditor';
 
-type Tab = 'subscribers' | 'authors' | 'admins' | 'footer' | 'signup';
+type Tab = 'subscribers' | 'authors' | 'admins' | 'mail-merge' | 'footer' | 'signup';
 
 export default function NewsletterDetail() {
   const { id = '' } = useParams();
@@ -49,7 +50,7 @@ export default function NewsletterDetail() {
     mutationFn: (
       body: Partial<
         Pick<Newsletter, 'name' | 'inbound_address' | 'from_address' | 'reply_to_address' | 'footer_html' | 'footer_text' | 'slug'>
-      > & { enabled?: boolean; allow_public_signup?: boolean; reply_to_author?: boolean },
+      > & Partial<MailMergeUpdate> & { enabled?: boolean; allow_public_signup?: boolean; reply_to_author?: boolean },
     ) => api<{ routing_warning?: string }>(`/api/newsletters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: async (res) => {
       setWarn(res.routing_warning ?? null);
@@ -69,6 +70,7 @@ export default function NewsletterDetail() {
     patch.mutateAsync(body);
   const saveFooter = (body: { footer_html?: string | null; footer_text?: string | null }) =>
     patch.mutateAsync(body);
+  const saveMailMerge = (body: MailMergeUpdate) => patch.mutateAsync(body);
   const saveSignup = (body: { slug?: string; allow_public_signup?: boolean }) => patch.mutateAsync(body);
   const deleteNewsletter = useMutation({
     mutationFn: () => api<{ routing_warning?: string }>(`/api/newsletters/${id}`, { method: 'DELETE' }),
@@ -182,7 +184,7 @@ export default function NewsletterDetail() {
       )}
 
       <div>
-        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 mb-4">
+        <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800 mb-4">
           <TabButton active={tab === 'admins'} onClick={() => setTab('admins')}>
             Admins {typeof adminCount === 'number' ? `(${adminCount})` : ''}
           </TabButton>
@@ -191,6 +193,9 @@ export default function NewsletterDetail() {
           </TabButton>
           <TabButton active={tab === 'subscribers'} onClick={() => setTab('subscribers')}>
             Subscribers {typeof n.subscriber_count === 'number' ? `(${n.subscriber_count})` : ''}
+          </TabButton>
+          <TabButton active={tab === 'mail-merge'} onClick={() => setTab('mail-merge')}>
+            Mail Merge
           </TabButton>
           <TabButton active={tab === 'footer'} onClick={() => setTab('footer')}>
             Footer
@@ -203,6 +208,8 @@ export default function NewsletterDetail() {
           <Subscribers newsletterId={id} canEdit={canEdit} />
         ) : tab === 'authors' ? (
           <Authors newsletterId={id} canEdit={canEdit} />
+        ) : tab === 'mail-merge' ? (
+          <MailMergeEditor n={n} canEdit={canEdit} onSave={saveMailMerge} saving={patch.isPending} />
         ) : tab === 'footer' ? (
           <FooterEditor
             n={n}
@@ -987,7 +994,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-2 text-sm -mb-px border-b-2 ${
+      className={`shrink-0 whitespace-nowrap px-3 py-2 text-sm -mb-px border-b-2 ${
         active
           ? 'border-slate-900 text-slate-900 font-medium dark:border-slate-100 dark:text-slate-100'
           : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'

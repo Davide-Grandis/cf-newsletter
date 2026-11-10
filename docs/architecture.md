@@ -55,6 +55,7 @@ The system is **multi-tenant**: a `newsletters` row is the parent of its own
 authors, subscribers and campaigns (all scoped by `newsletter_id`).
 
 - `newsletters(id, name, inbound_address UNIQUE, from_address NULL, footer_html NULL, footer_text NULL, slug UNIQUE NULL, allow_public_signup, enabled, created_at)` — `footer_*` override the global `DEFAULT_FOOTER_*` per newsletter; `slug` + `allow_public_signup` back the public subscribe page (`/subscribe/<slug>`).
+- Newsletter mail merge uses `mail_merge_enabled` (default `0`), `mail_merge_html` and `mail_merge_text`. The consumer prepends these optional headers per recipient, substituting only `{{subscriber_name}}` from the queued subscriber name. Templates use the footer HTML allow-list, with subscriber names HTML-escaped and no automatic unsubscribe link in the header. Existing installations add these columns using `db/updates/0003_newsletter_mail_merge.sql`.
 - `authors(newsletter_id, email, name, created_at, PRIMARY KEY(newsletter_id, email))` — per-newsletter inbound-sender allow-list.
 - `subscribers(id, newsletter_id, email, name, verified, status, subscribed_at, unsubscribed_at, bounce_count, last_bounce_at, token, confirm_token NULL, UNIQUE(newsletter_id, email))` — `token` authenticates unsubscribe links; `confirm_token` is the pending double opt-in flag (cleared on confirmation).
 - `campaigns(id, newsletter_id, subject, html, text, sent_by, created_at, status, total_recipients, sent_count, failed_count, attachment_count, attachment_total_bytes, link_mode)`

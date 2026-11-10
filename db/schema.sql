@@ -14,6 +14,10 @@ CREATE TABLE IF NOT EXISTS newsletters (
   from_address    TEXT,
   reply_to_address TEXT,
   reply_to_author INTEGER NOT NULL DEFAULT 0 CHECK (reply_to_author IN (0,1)),
+  -- Optional personalized header. Only {{subscriber_name}} is substituted.
+  mail_merge_enabled INTEGER NOT NULL DEFAULT 0 CHECK (mail_merge_enabled IN (0,1)),
+  mail_merge_html TEXT,
+  mail_merge_text TEXT,
   -- Optional per-newsletter email footer (HTML + plain text). NULL/empty falls
   -- back to the global DEFAULT_FOOTER_HTML / DEFAULT_FOOTER_TEXT settings. May
   -- contain {{unsubscribe_url}}, {{newsletter_name}}, {{email}} tokens; the

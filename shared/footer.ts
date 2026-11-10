@@ -104,7 +104,7 @@ const SAFE_URL_RE = /^(https?:|mailto:)/i;
 const ATTR_RE =
   /([a-zA-Z_:][-a-zA-Z0-9_:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
 
-function sanitizeAttrs(tag: string, attrStr: string): string {
+function sanitizeAttrs(tag: string, attrStr: string, allowTemplateUrls: boolean): string {
   const allowed = TAG_ATTRS[tag];
   const out: string[] = [];
   let m: RegExpExecArray | null;
@@ -117,7 +117,7 @@ function sanitizeAttrs(tag: string, attrStr: string): string {
     if (!GLOBAL_ATTRS.has(name) && !(allowed && allowed.has(name))) continue;
     if (URL_ATTRS.has(name)) {
       const v = value.trim();
-      if (!v.startsWith('{{') && !SAFE_URL_RE.test(v)) continue; // drop unsafe URL
+      if (!(allowTemplateUrls && v.startsWith('{{')) && !SAFE_URL_RE.test(v)) continue; // drop unsafe URL
     }
     if (name === 'style' && /(javascript:|expression\s*\(|url\s*\(\s*['"]?\s*javascript:)/i.test(value)) {
       continue; // drop dangerous style
@@ -133,7 +133,7 @@ function sanitizeAttrs(tag: string, attrStr: string): string {
  * content; disallowed/dangerous attributes are stripped. Token placeholders
  * like `{{unsubscribe_url}}` survive (they are resolved at send time).
  */
-export function sanitizeFooterHtml(input: string): string {
+export function sanitizeFooterHtml(input: string, allowTemplateUrls = true): string {
   if (!input) return '';
   let html = input;
   // 1. Remove dangerous elements together with their content.
@@ -152,7 +152,7 @@ export function sanitizeFooterHtml(input: string): string {
     const tag = name.toLowerCase();
     if (!ALLOWED_TAGS.has(tag)) return ''; // unwrap unknown tag, keep its text
     if (slash === '/') return `</${tag}>`;
-    return `<${tag}${sanitizeAttrs(tag, attrs)}>`;
+    return `<${tag}${sanitizeAttrs(tag, attrs, allowTemplateUrls)}>`;
   });
   return html;
 }

@@ -31,6 +31,23 @@ and its own subscribers and authors.
 - **Signup** — enable a hosted **public subscribe page** for the newsletter and
   get its URL and an embed snippet. See *Public signup* below.
 
+## Mail merge
+
+Open a newsletter's **Mail Merge** tab (before **Footer**) and click **Edit**.
+Enable mail merge, enter an HTML header and/or a plain-text header, then save.
+The matching header is inserted before each recipient's original email body;
+the existing footer and its unsubscribe link stay unchanged.
+
+The only supported variable is `{{subscriber_name}}` (spaces inside the braces
+are allowed). For example, `Hello {{subscriber_name}},` becomes `Hello Jane,`
+for a subscriber named Jane. Missing names become empty text. Use the preview
+name field to check different names, including an empty one, before saving.
+HTML is sanitized and subscriber names are escaped in HTML output.
+
+Mail merge starts disabled. Disabling it stops adding the headers but keeps
+the templates for later reuse. Each newsletter has its own settings; there is
+no global default header. Read-only admins can view but cannot change them.
+
 ## Public signup
 
 Each newsletter can expose a **hosted subscribe page** so anyone can sign up,
