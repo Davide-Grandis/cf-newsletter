@@ -16,6 +16,9 @@ export interface MailMergeUpdate {
 const inputCls =
   'w-full border border-slate-300 rounded px-2 py-1.5 text-sm bg-white text-slate-900 disabled:opacity-60 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100';
 
+const DEFAULT_HTML = '<p>Hello {{subscriber_name}},</p>';
+const DEFAULT_TEXT = 'Hello {{subscriber_name}},';
+
 export function MailMergeEditor({
   n,
   canEdit,
@@ -91,14 +94,21 @@ export function MailMergeEditor({
       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
         Add a personalized header before the original email body. The only supported variable is{' '}
         <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{subscriber_name}}'}</code>.
-        Missing names render as empty text. The email body and footer are not changed.
+        Missing names render as empty text.
       </p>
       <label className="mt-3 flex items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={enabled}
           disabled={!editing || saving}
-          onChange={(e) => setEnabled(e.target.checked)}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setEnabled(checked);
+            if (checked) {
+              setHtml((value) => value.trim() ? value : DEFAULT_HTML);
+              setText((value) => value.trim() ? value : DEFAULT_TEXT);
+            }
+          }}
         />
         Enable mail merge
       </label>
@@ -118,7 +128,7 @@ export function MailMergeEditor({
             rows={8}
             maxLength={MAIL_MERGE_HTML_MAX}
             spellCheck={false}
-            placeholder="<p>Hello {{subscriber_name}},</p>"
+            placeholder={DEFAULT_HTML}
             className={`${inputCls} font-mono text-xs leading-relaxed`}
           />
           <label htmlFor="mail-merge-text" className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-3 block">
@@ -132,7 +142,7 @@ export function MailMergeEditor({
             rows={4}
             maxLength={MAIL_MERGE_TEXT_MAX}
             spellCheck={false}
-            placeholder="Hello {{subscriber_name}},"
+            placeholder={DEFAULT_TEXT}
             className={`${inputCls} font-mono text-xs leading-relaxed`}
           />
         </div>
