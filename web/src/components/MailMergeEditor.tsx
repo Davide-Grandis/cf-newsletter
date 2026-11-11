@@ -114,9 +114,11 @@ export function MailMergeEditor({
             />
             Enable mail merge
           </label>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {enabled ? 'The header is added to outgoing emails.' : 'Disabled: no header is added. Your templates are kept.'}
-          </p>
+          {enabled && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              The header is added to outgoing emails.
+            </p>
+          )}
         </div>
         <div className="min-w-0">
           <label htmlFor="mail-merge-sample-name" className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
