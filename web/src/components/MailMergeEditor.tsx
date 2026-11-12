@@ -9,6 +9,7 @@ import {
 
 export interface MailMergeUpdate {
   mail_merge_enabled: boolean;
+  mail_merge_incoming: boolean;
   mail_merge_html: string | null;
   mail_merge_text: string | null;
 }
@@ -31,10 +32,12 @@ export function MailMergeEditor({
   saving: boolean;
 }) {
   const baselineEnabled = n.mail_merge_enabled === 1;
+  const baselineIncoming = (n.mail_merge_incoming ?? 1) === 1;
   const baselineHtml = n.mail_merge_html ?? '';
   const baselineText = n.mail_merge_text ?? '';
   const [editing, setEditing] = useState(false);
   const [enabled, setEnabled] = useState(baselineEnabled);
+  const [incoming, setIncoming] = useState(baselineIncoming);
   const [html, setHtml] = useState(baselineHtml);
   const [text, setText] = useState(baselineText);
   const [sampleName, setSampleName] = useState('Jane Doe');
@@ -43,19 +46,21 @@ export function MailMergeEditor({
   useEffect(() => {
     if (!editing) {
       setEnabled(baselineEnabled);
+      setIncoming(baselineIncoming);
       setHtml(baselineHtml);
       setText(baselineText);
     }
-  }, [editing, baselineEnabled, baselineHtml, baselineText]);
+  }, [editing, baselineEnabled, baselineIncoming, baselineHtml, baselineText]);
 
   function reset() {
     setEnabled(baselineEnabled);
+    setIncoming(baselineIncoming);
     setHtml(baselineHtml);
     setText(baselineText);
     setError(null);
   }
 
-  const dirty = enabled !== baselineEnabled || html !== baselineHtml || text !== baselineText;
+  const dirty = enabled !== baselineEnabled || incoming !== baselineIncoming || html !== baselineHtml || text !== baselineText;
   const previewDoc = useMemo(() => (
     '<!doctype html><html><head><meta charset="utf-8">' +
     '<style>body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;' +
@@ -68,6 +73,7 @@ export function MailMergeEditor({
     try {
       await onSave({
         mail_merge_enabled: enabled,
+        mail_merge_incoming: incoming,
         mail_merge_html: html.trim() ? html : null,
         mail_merge_text: text.trim() ? text : null,
       });
@@ -92,11 +98,11 @@ export function MailMergeEditor({
         )}
       </div>
       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-        Add a personalized header before the original email body. The only supported variable is{' '}
+        Personalize the incoming email or add a separate header. The only supported variable is{' '}
         <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{subscriber_name}}'}</code>.
         Missing names render as empty text.
       </p>
-      <div className="mt-3 grid gap-4 lg:grid-cols-2">
+      <div className={`mt-3 grid gap-4 ${!incoming ? 'lg:grid-cols-2' : ''}`}>
         <div className="min-w-0">
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -106,7 +112,7 @@ export function MailMergeEditor({
               onChange={(e) => {
                 const checked = e.target.checked;
                 setEnabled(checked);
-                if (checked) {
+                if (checked && !incoming) {
                   setHtml((value) => value.trim() ? value : DEFAULT_HTML);
                   setText((value) => value.trim() ? value : DEFAULT_TEXT);
                 }
@@ -114,74 +120,99 @@ export function MailMergeEditor({
             />
             Enable mail merge
           </label>
-          {enabled && (
+          <label className={`mt-3 flex items-center gap-2 text-sm ${!enabled ? 'opacity-50' : ''}`}>
+            <input
+              type="checkbox"
+              checked={incoming}
+              disabled={!enabled || !editing || saving}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setIncoming(checked);
+                if (!checked) {
+                  setHtml((value) => value.trim() ? value : DEFAULT_HTML);
+                  setText((value) => value.trim() ? value : DEFAULT_TEXT);
+                }
+              }}
+            />
+            Header is included in the incoming email
+          </label>
+          {incoming ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Place <code>{'{{subscriber_name}}'}</code> in the incoming email&apos;s HTML and/or plain-text body.
+              Its formatting is retained; no separate header is added.
+            </p>
+          ) : enabled && (
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               The header is added to outgoing emails.
             </p>
           )}
         </div>
-        <div className="min-w-0">
-          <label htmlFor="mail-merge-sample-name" className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Preview subscriber name
-          </label>
-          <input
-            id="mail-merge-sample-name"
-            value={sampleName}
-            onChange={(e) => setSampleName(e.target.value)}
-            placeholder="Leave empty to preview a missing name"
-            className={`${inputCls} mt-0.5`}
-          />
-        </div>
+        {!incoming && (
+          <div className="min-w-0">
+            <label htmlFor="mail-merge-sample-name" className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Preview subscriber name
+            </label>
+            <input
+              id="mail-merge-sample-name"
+              value={sampleName}
+              onChange={(e) => setSampleName(e.target.value)}
+              placeholder="Leave empty to preview a missing name"
+              className={`${inputCls} mt-0.5`}
+            />
+          </div>
+        )}
       </div>
-      <div className="mt-3 grid gap-4 lg:grid-cols-2">
-        <div className="min-w-0">
-          <label htmlFor="mail-merge-html" className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            HTML header
-          </label>
-          <textarea
-            id="mail-merge-html"
-            value={html}
-            disabled={!editing || saving}
-            onChange={(e) => setHtml(e.target.value)}
-            rows={8}
-            maxLength={MAIL_MERGE_HTML_MAX}
-            spellCheck={false}
-            placeholder={DEFAULT_HTML}
-            className={`${inputCls} mt-0.5 block h-44 font-mono text-xs leading-relaxed`}
-          />
+      {!incoming && (
+        <div className="mt-3 grid gap-4 lg:grid-cols-2">
+          <div className="min-w-0">
+            <label htmlFor="mail-merge-html" className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              HTML header
+            </label>
+            <textarea
+              id="mail-merge-html"
+              value={html}
+              disabled={!editing || saving}
+              onChange={(e) => setHtml(e.target.value)}
+              rows={8}
+              maxLength={MAIL_MERGE_HTML_MAX}
+              spellCheck={false}
+              placeholder={DEFAULT_HTML}
+              className={`${inputCls} mt-0.5 block h-44 font-mono text-xs leading-relaxed`}
+            />
+          </div>
+          <div className="min-w-0">
+            <span className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">HTML preview</span>
+            <iframe
+              title="Mail merge header preview"
+              sandbox=""
+              srcDoc={previewDoc}
+              className="mt-0.5 block w-full h-44 border border-slate-200 rounded bg-white dark:border-slate-700"
+            />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="mail-merge-text" className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Plain-text header
+            </label>
+            <textarea
+              id="mail-merge-text"
+              value={text}
+              disabled={!editing || saving}
+              onChange={(e) => setText(e.target.value)}
+              rows={4}
+              maxLength={MAIL_MERGE_TEXT_MAX}
+              spellCheck={false}
+              placeholder={DEFAULT_TEXT}
+              className={`${inputCls} mt-0.5 block h-[90px] font-mono text-xs leading-relaxed`}
+            />
+          </div>
+          <div className="min-w-0">
+            <span className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Text preview</span>
+            <pre className="mt-0.5 w-full h-[90px] overflow-auto border border-slate-200 rounded bg-slate-50 p-2 text-xs whitespace-pre-wrap font-mono text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-200">
+              {renderMailMerge(text, sampleName, false)}
+            </pre>
+          </div>
         </div>
-        <div className="min-w-0">
-          <span className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">HTML preview</span>
-          <iframe
-            title="Mail merge header preview"
-            sandbox=""
-            srcDoc={previewDoc}
-            className="mt-0.5 block w-full h-44 border border-slate-200 rounded bg-white dark:border-slate-700"
-          />
-        </div>
-        <div className="min-w-0">
-          <label htmlFor="mail-merge-text" className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Plain-text header
-          </label>
-          <textarea
-            id="mail-merge-text"
-            value={text}
-            disabled={!editing || saving}
-            onChange={(e) => setText(e.target.value)}
-            rows={4}
-            maxLength={MAIL_MERGE_TEXT_MAX}
-            spellCheck={false}
-            placeholder={DEFAULT_TEXT}
-            className={`${inputCls} mt-0.5 block h-[90px] font-mono text-xs leading-relaxed`}
-          />
-        </div>
-        <div className="min-w-0">
-          <span className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Text preview</span>
-          <pre className="mt-0.5 w-full h-[90px] overflow-auto border border-slate-200 rounded bg-slate-50 p-2 text-xs whitespace-pre-wrap font-mono text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-200">
-            {renderMailMerge(text, sampleName, false)}
-          </pre>
-        </div>
-      </div>
+      )}
       {error && <p role="alert" className="text-xs text-red-600 mt-2">{error}</p>}
       {editing && (
         <div className="mt-3 flex gap-2">

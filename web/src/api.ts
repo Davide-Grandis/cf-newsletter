@@ -76,6 +76,7 @@ export interface Newsletter {
   reply_to_address?: string | null;
   reply_to_author?: 0 | 1;
   mail_merge_enabled?: 0 | 1;
+  mail_merge_incoming?: 0 | 1;
   mail_merge_html?: string | null;
   mail_merge_text?: string | null;
   // Optional per-newsletter footer. null/empty => inherits the global

@@ -29,6 +29,7 @@ export interface CampaignRow {
   footer_html: string | null;
   footer_text: string | null;
   mail_merge_enabled: number;
+  mail_merge_incoming: number;
   mail_merge_html: string | null;
   mail_merge_text: string | null;
 }

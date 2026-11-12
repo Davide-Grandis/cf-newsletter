@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS newsletters (
   reply_to_author INTEGER NOT NULL DEFAULT 0 CHECK (reply_to_author IN (0,1)),
   -- Optional personalized header. Only {{subscriber_name}} is substituted.
   mail_merge_enabled INTEGER NOT NULL DEFAULT 0 CHECK (mail_merge_enabled IN (0,1)),
+  -- 1 personalizes placeholders in the incoming body; 0 prepends saved headers.
+  mail_merge_incoming INTEGER NOT NULL DEFAULT 1 CHECK (mail_merge_incoming IN (0,1)),
   mail_merge_html TEXT,
   mail_merge_text TEXT,
   -- Optional per-newsletter email footer (HTML + plain text). NULL/empty falls

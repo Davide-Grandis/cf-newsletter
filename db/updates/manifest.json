@@ -16,5 +16,11 @@
     "file": "0003_newsletter_mail_merge.sql",
     "description": "Configure optional personalized email headers per newsletter",
     "checkSql": "SELECT CASE WHEN (SELECT COUNT(*) FROM pragma_table_info('newsletters') WHERE name IN ('mail_merge_enabled', 'mail_merge_html', 'mail_merge_text')) = 3 THEN 1 ELSE 0 END AS present"
+  },
+  {
+    "id": "0004_mail_merge_incoming",
+    "file": "0004_mail_merge_incoming.sql",
+    "description": "Choose incoming email placeholders or a separately prepended mail merge header",
+    "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('newsletters') WHERE name = 'mail_merge_incoming'"
   }
 ]

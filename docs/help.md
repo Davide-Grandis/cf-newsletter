@@ -34,17 +34,31 @@ and its own subscribers and authors.
 ## Mail merge
 
 Open a newsletter's **Mail Merge** tab (before **Footer**) and click **Edit**.
-Enable mail merge, enter an HTML header and/or a plain-text header, then save.
-The matching header is inserted before each recipient's original email body;
-the existing footer and its unsubscribe link stay unchanged.
+Enable mail merge, then choose how the personalized greeting is provided:
+
+- **Header is included in the incoming email** (checked by default): write
+  `Hello {{subscriber_name}},` directly in the email you send to the newsletter.
+  The app substitutes the name in the original HTML and plain-text body,
+  preserving its formatting. No separate header is added, including when the
+  incoming email has no placeholder. The second switch is greyed out while
+  the main mail merge switch is off.
+- **Unchecked**: enter an HTML header and/or a plain-text header in the console,
+  as before. The matching header is inserted before the original email body.
+  The editors and previews are shown for this mode.
+
+Save to apply your choice. Switching modes preserves your saved separate
+header templates. The existing footer and unsubscribe link stay unchanged.
 
 The only supported variable is `{{subscriber_name}}` (spaces inside the braces
 are allowed). For example, `Hello {{subscriber_name}},` becomes `Hello Jane,`
-for a subscriber named Jane. Missing names become empty text. Use the preview
-name field to check different names, including an empty one, before saving.
-HTML is sanitized and subscriber names are escaped in HTML output.
+for a subscriber named Jane. Missing names become empty text. In incoming
+email mode, keep the placeholder as one text token (do not format individual
+characters); it is replaced in visible body text, not links, HTML attributes,
+styles, or scripts. For separate headers, use the preview name field to check
+different names, including an empty one, before saving. Separate header HTML
+is sanitized and subscriber names are escaped in HTML output in both modes.
 
-Mail merge starts disabled. Disabling it stops adding the headers but keeps
+Mail merge starts disabled. Disabling it stops personalization but keeps
 the templates for later reuse. Each newsletter has its own settings; there is
 no global default header. Read-only admins can view but cannot change them.
 

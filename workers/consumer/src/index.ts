@@ -204,9 +204,14 @@ export default {
         let failedInBatch = 0;
         for (const r of recipients) {
           try {
-            let html = await renderRecipientHtml(env, campaign, allAtts, r.subscriberId);
-            let text = campaign.text ?? '';
-            ({ html, text } = applyMailMerge(campaign, r.name, html, text));
+            const mergeIncoming = campaign.mail_merge_incoming === 1;
+            let body = { html: campaign.html ?? '', text: campaign.text ?? '' };
+            if (mergeIncoming) body = applyMailMerge(campaign, r.name, body.html, body.text);
+            let html = await renderRecipientHtml(env, { ...campaign, html: body.html }, allAtts, r.subscriberId);
+            let text = body.text;
+            // Incoming placeholders are resolved before tracking; the separate
+            // header stays outside tracking, matching the existing prepend mode.
+            if (!mergeIncoming) ({ html, text } = applyMailMerge(campaign, r.name, html, text));
             const unsubUrl = unsubscribeUrl(env.TRACKING_BASE_URL, r.subscriberId, r.token, campaignId);
             // Append the footer AFTER tracking instrumentation so its
             // unsubscribe/author links are never click-rewritten. The footer is

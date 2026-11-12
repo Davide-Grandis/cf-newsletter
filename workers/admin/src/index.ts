@@ -1297,7 +1297,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         const row = await env.DB
           .prepare(
             `SELECT n.id, n.name, n.inbound_address, n.from_address, n.reply_to_address, n.reply_to_author, n.footer_html, n.footer_text, ` +
-              `n.mail_merge_enabled, n.mail_merge_html, n.mail_merge_text, n.slug, n.allow_public_signup, n.enabled, n.created_at, ` +
+              `n.mail_merge_enabled, n.mail_merge_incoming, n.mail_merge_html, n.mail_merge_text, n.slug, n.allow_public_signup, n.enabled, n.created_at, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id) AS subscriber_count, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id AND s.status='active') AS active_count, ` +
               `(SELECT COUNT(*) FROM authors a WHERE a.newsletter_id = n.id) AS author_count, ` +
@@ -1320,6 +1320,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           footer_html?: string | null;
           footer_text?: string | null;
           mail_merge_enabled?: unknown;
+          mail_merge_incoming?: unknown;
           mail_merge_html?: unknown;
           mail_merge_text?: unknown;
           slug?: string;
@@ -1400,6 +1401,13 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           }
           sets.push('mail_merge_enabled = ?');
           binds.push(body.mail_merge_enabled ? 1 : 0);
+        }
+        if ('mail_merge_incoming' in body) {
+          if (typeof body.mail_merge_incoming !== 'boolean') {
+            return Response.json({ error: 'mail_merge_incoming must be a boolean' }, { status: 400 });
+          }
+          sets.push('mail_merge_incoming = ?');
+          binds.push(body.mail_merge_incoming ? 1 : 0);
         }
         for (const field of ['mail_merge_html', 'mail_merge_text'] as const) {
           if (!(field in body)) continue;
