@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyMailMerge, renderMailMerge, sanitizeMailMergeHtml } from './mail-merge';
-import { renderFooterHtml, renderFooterText, sanitizeFooterHtml } from './footer';
+import { applyMailMerge, renderMailMerge, sanitizeMailMergeHtml } from '../shared/mail-merge';
+import { renderFooterHtml, renderFooterText, sanitizeFooterHtml } from '../shared/footer';
 
 const settings = {
   mail_merge_enabled: 1,
