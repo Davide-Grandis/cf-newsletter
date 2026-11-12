@@ -199,7 +199,7 @@ const TABS: Tab[] = [
   {
     title: 'Public signup',
     description:
-      'Cloudflare Turnstile protects the public subscribe page (enabled per newsletter on its Signup tab) from bots. It starts disabled. Create a Turnstile widget for the tracking domain, set the tracker secret (wrangler secret put TURNSTILE_SECRET_KEY --name cf-newsletter-tracker), paste the site key here, then enable protection.',
+      'Cloudflare Turnstile protects the public subscribe page (enabled per newsletter on its Signup tab) from bots. Protection starts disabled. Follow the setup steps below before enabling it.',
     fields: [
       { key: 'TURNSTILE_ENABLED', label: 'Turnstile bot protection', help: 'When on, the public signup form requires a Turnstile challenge. When off, the form is available without bot protection (site key and secret are not required).', type: 'boolean', hideKey: true, hideOverride: true },
       { key: 'TURNSTILE_SITE_KEY', label: 'Turnstile site key', help: 'Public site key of the Turnstile widget. The secret key is a tracker-worker secret, not a setting.', hideKey: true, hideSource: true, enabledBy: 'TURNSTILE_ENABLED' },
@@ -410,6 +410,19 @@ export default function Settings() {
   }, [query.data]);
 
   const effective = (key: string) => byKey.get(key)?.value ?? '';
+  const trackingBaseUrl = effective('TRACKING_BASE_URL').trim().replace(/\/+$/, '');
+  const baseDomain = effective('BASE_DOMAIN');
+  const resolvedTrackingUrl = (!trackingBaseUrl || trackingBaseUrl === 'https://track.yourdomain.com') && baseDomain
+    ? `https://track.${baseDomain}`
+    : trackingBaseUrl;
+  let turnstileHostname = '';
+  try {
+    if (resolvedTrackingUrl !== 'https://track.yourdomain.com') {
+      turnstileHostname = new URL(resolvedTrackingUrl).hostname;
+    }
+  } catch {
+    // Do not suggest a hostname until a valid tracking URL is configured.
+  }
   const allFields = TABS.flatMap((t) => t.sections.flatMap((s) => s.fields));
   const editFieldMeta = editKey ? allFields.find((f) => f.key === editKey) : null;
   const changed =
@@ -535,6 +548,26 @@ export default function Settings() {
               <div className="mt-2 rounded border border-sky-200 bg-sky-50 p-2.5 text-xs leading-relaxed text-sky-900 whitespace-pre-line dark:border-sky-900/60 dark:bg-sky-900/20 dark:text-sky-200">
                 {section.note}
               </div>
+            )}
+            {activeTab.id === 'delivery' && (
+              <ol className="mt-2 list-decimal space-y-2 rounded border border-sky-200 bg-sky-50 p-2.5 pl-7 text-xs leading-relaxed text-sky-900 dark:border-sky-900/60 dark:bg-sky-900/20 dark:text-sky-200">
+                <li>
+                  In the Cloudflare dashboard, open Turnstile and add a widget.{' '}
+                  {turnstileHostname
+                    ? <>Under Hostname Management, add exactly <code className="font-semibold break-all">{turnstileHostname}</code>.</>
+                    : <>First configure the Sending domain in Account details or the Tracking base URL in Tracking &amp; bounce; the required hostname will appear here.</>}
+                  {' '}Use only the hostname, without https://, a port, or a path. This is the tracker hostname that serves the signup page, not the console hostname or the website embedding the signup iframe.
+                </li>
+                <li>
+                  Set the widget's secret key on the tracker worker: <code className="break-all">wrangler secret put TURNSTILE_SECRET_KEY --name cf-newsletter-tracker</code>. Paste the secret key when prompted.
+                </li>
+                <li>
+                  Enable Turnstile bot protection below, then immediately edit Turnstile site key and paste the public site key from the same widget. Signup is unavailable while protection is enabled without both keys.
+                </li>
+                <li>
+                  Open a newsletter's Signup tab, enable public signup, and test its subscribe link. If the tracking hostname changes, update the widget's allowed hostnames too.
+                </li>
+              </ol>
             )}
           </div>
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
