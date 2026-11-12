@@ -12,6 +12,7 @@ import Bounces from './pages/Bounces';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import Help from './pages/Help';
+import { UpdateNotice } from './pages/Updates';
 import type { Identity } from './auth';
 
 export default function App() {
@@ -103,6 +104,7 @@ function Layout() {
 
   return (
     <div className="h-screen flex flex-col">
+      <UpdateNotice />
       {needsSetup && (
         <SetupRequiredModal
           missingAccess={missingAccess}

@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { api, ApiError, fetchApi, Setting } from '../api';
 import { useIdentity, type Identity } from '../auth';
 import SuperAdmins from './SuperAdmins';
+import Updates from './Updates';
 import { localPart, LocalPartInput } from './Newsletters';
 
 type FieldType = 'text' | 'number' | 'textarea' | 'boolean';
@@ -63,6 +65,7 @@ interface Tab {
 // remains the source of truth for which keys are valid and how they're validated.
 // Sections are grouped into a small number of tabs to keep the page scannable.
 const TABS: Tab[] = [
+  { id: 'updates', label: 'Updates', topContent: <Updates />, sections: [] },
   {
     id: 'login',
     label: 'Account details',
@@ -364,6 +367,7 @@ function Branding({ color }: { color: string }) {
 
 export default function Settings() {
   const qc = useQueryClient();
+  const [search, setSearch] = useSearchParams();
   // The single field currently unlocked for editing (one at a time keeps the
   // surface for accidental changes minimal). `draft` is its working value.
   const [editKey, setEditKey] = useState<string | null>(null);
@@ -373,7 +377,8 @@ export default function Settings() {
   // Best-effort warning returned after saving the sending domain (e.g. the
   // bounce Email Routing rule could not be created automatically).
   const [saveWarn, setSaveWarn] = useState<string | null>(null);
-  const [tab, setTab] = useState<string>(TABS[0]!.id);
+  const tab = search.get('tab') ?? 'login';
+  const setTab = (value: string) => setSearch({ tab: value });
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0]!;
 

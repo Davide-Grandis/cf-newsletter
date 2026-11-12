@@ -22,5 +22,11 @@
     "file": "0004_mail_merge_incoming.sql",
     "description": "Choose incoming email placeholders or a separately prepended mail merge header",
     "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('newsletters') WHERE name = 'mail_merge_incoming'"
+  },
+  {
+    "id": "0005_in_app_updates",
+    "file": "0005_in_app_updates.sql",
+    "description": "Track durable updates, deployment locks and encrypted per-update credentials",
+    "checkSql": "SELECT CASE WHEN (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('update_jobs','update_lock','update_events','update_cache')) = 4 THEN 1 ELSE 0 END AS present"
   }
 ]

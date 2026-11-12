@@ -20,3 +20,4 @@ docs/*.gdoc
 
 # Deployment-specific worker configs and Wrangler templates stay in private tooling.
 workers/*/wrangler.toml
+workers/*/wrangler.jsonc

@@ -66,10 +66,32 @@ the selected domain if necessary, and wait for DNS/DKIM to become active.
 
 ### Updates
 
-To install a newer release, open the same hosted installer and follow the
-on-screen instructions. Existing `cf-newsletter-*` deployments keep their data
-and Worker secrets. Back up and manually migrate legacy `newsletter-*` resources
-before updating; preflight blocks legacy-only and incomplete installations.
+Open **Settings -> Updates** in the console to check releases, review changes,
+run preflight and approve an update. Updates are never installed automatically.
+Enter a temporary Cloudflare token with **Workers Scripts Edit** on the target
+account, or explicitly save a dedicated update token on the updater Worker.
+Saving a token is optional; in-app updates are not. This permission can modify
+other Workers in the same account.
+
+Temporary update credentials are encrypted in the target account, expire after
+one hour, and are removed on completion or failure. A cleanup schedule removes
+expired credentials from abandoned jobs. Credentials never appear in Workflow
+parameters, logs or update history. Revoke temporary tokens after use.
+
+The [hosted installer/updater](https://installer.cf-newsletter.com/) remains a
+supported alternative indefinitely, including when the console is unavailable.
+Existing installations need one hosted bootstrap update to create the updater.
+Hosted updates use a newly supplied installation token, not a saved update token;
+existing runtime secrets and saved update credentials are preserved.
+
+Back up D1 or verify a recovery point before updating. Routine updates preserve
+bindings, resource IDs/locality, secrets, settings, routes, schedules and Queues.
+Failures retain a deployment lock and per-Worker checkpoints; resume with a fresh
+token from the console or hosted updater. Rolling back code does not restore D1
+data. Legacy migrations, destructive schema changes and unsupported infrastructure
+changes require explicit manual intervention.
+
+See [the update operations guide](docs/updates.md).
 
 ## Documentation
 

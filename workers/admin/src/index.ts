@@ -12,6 +12,8 @@
 // secret — Access is the only gate.
 
 import { EmailMessage } from 'cloudflare:email';
+import type { Updater } from '../../updater/src/index';
+import { boundedBytes } from '../../../shared/update-release';
 import initialHelpDocument from '../../../docs/help.md';
 import {
   readWarmupConfig,
@@ -33,6 +35,7 @@ import {
 import { countSentSince, computeDemand, loadWarmupState } from '../../../shared/db';
 
 export interface Env {
+  UPDATER?: Service<Updater>;
   DB: D1Database;
   ASSETS: Fetcher;
   // R2 bucket holding GUI media (logos, header images). Served read-only
@@ -477,6 +480,27 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
   const auth = await resolveUser(rawEnv.DB, email);
   if (!auth) return forbidden();
   const isSuper = auth.role === 'super_admin';
+  if (p === '/api/updates' || p.startsWith('/api/updates/')) {
+    if (!isSuper) return forbidden();
+    if (!rawEnv.UPDATER) return Response.json({ error: 'Run the hosted updater once to provision the updater Worker.' }, { status: 503 });
+    if (m !== 'GET' && (req.headers.get('origin') !== url.origin || req.headers.get('x-requested-with') !== 'XMLHttpRequest')) {
+      return Response.json({ error: 'Update requests must originate from this console.' }, { status: 403 });
+    }
+    if (m !== 'GET' && Number(req.headers.get('content-length') ?? 0) > 4096) return Response.json({ error: 'Request too large.' }, { status: 413 });
+    try {
+      if (p === '/api/updates' && m === 'GET') return Response.json(await rawEnv.UPDATER.status(), { headers: { 'cache-control': 'no-store' } });
+      if (p === '/api/updates/check' && m === 'POST') return Response.json(await rawEnv.UPDATER.status(true), { headers: { 'cache-control': 'no-store' } });
+      const body = JSON.parse(new TextDecoder().decode(await boundedBytes(new Response(req.body), 4096))) as { token?: string; releaseId: number; digest: string; recoveryConfirmed: boolean; jobId?: string; releaseLock?: boolean };
+      if (body.token !== undefined && (typeof body.token !== 'string' || body.token.length > 160)) return Response.json({ error: 'Invalid token.' }, { status: 400 });
+      if (p === '/api/updates/preflight' && m === 'POST') return Response.json(await rawEnv.UPDATER.preflight(body));
+      if (p === '/api/updates/start' && m === 'POST') return Response.json(await rawEnv.UPDATER.start(body, email), { status: 202 });
+      if (p === '/api/updates/token' && (m === 'PUT' || m === 'DELETE')) return Response.json(await rawEnv.UPDATER.credential(body.token ?? '', m === 'DELETE'));
+      if (p === '/api/updates/recover' && m === 'POST' && typeof body.jobId === 'string') return Response.json(await rawEnv.UPDATER.recover(body.jobId, body.token ?? '', email, body.releaseLock === true));
+      return Response.json({ error: 'Not found.' }, { status: 404 });
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : 'Update operation failed.' }, { status: 400, headers: { 'cache-control': 'no-store' } });
+    }
+  }
   // Per-admin capability: super_admins and edit-admins may mutate; read-only
   // admins may only view. Capability is global to the admin (applies to all
   // their assigned newsletters).
