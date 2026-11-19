@@ -184,7 +184,7 @@ export default function NewsletterDetail() {
       )}
 
       <div>
-        <div className="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-800 mb-4">
+        <div className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 dark:border-slate-800 mb-4">
           <TabButton active={tab === 'admins'} onClick={() => setTab('admins')}>
             Admins {typeof adminCount === 'number' ? `(${adminCount})` : ''}
           </TabButton>
