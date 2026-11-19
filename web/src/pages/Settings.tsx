@@ -65,7 +65,6 @@ interface Tab {
 // remains the source of truth for which keys are valid and how they're validated.
 // Sections are grouped into a small number of tabs to keep the page scannable.
 const TABS: Tab[] = [
-  { id: 'updates', label: 'Updates', topContent: <Updates />, sections: [] },
   {
     id: 'login',
     label: 'Account details',
@@ -224,6 +223,7 @@ const TABS: Tab[] = [
   },
     ],
   },
+  { id: 'updates', label: 'Updates', topContent: <Updates />, sections: [] },
 ];
 
 const inputCls =
