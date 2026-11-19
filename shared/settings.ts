@@ -47,7 +47,7 @@ export const SETTING_KEYS = [
   // -- Public signup --
   // Cloudflare Turnstile site key (public) for the public subscribe page. The
   // matching secret is a Worker Secret (TURNSTILE_SECRET_KEY), not a setting.
-  // Empty disables bot protection (and, by safety, the public signup page).
+  // Protection stays off until the app has validated and deployed both keys.
   'TURNSTILE_ENABLED',
   'TURNSTILE_SITE_KEY',
   // -- Attachments --

@@ -89,11 +89,23 @@ How it works:
 3. Clicking the link confirms the subscription (and re-activates a previously
    unsubscribed/bounced address). Only then do they start receiving mail.
 
-**Recommended after installation (super admin):** Turnstile protection starts
-disabled. Create a Turnstile widget for the tracking domain, set the matching
-secret on the tracker worker (`wrangler secret put TURNSTILE_SECRET_KEY --name
-cf-newsletter-tracker`), then open **Settings → Subscribe → Public signup**, enter
-the site key and enable **Turnstile bot protection**.
+**Turnstile setup (super admin):** Fresh installations automatically create a
+managed widget for the tracking hostname and enable protection after its site
+key and matching secret have been installed on the tracker. This optional step
+uses the installation token's Account: Turnstile Edit permission. If it fails,
+installation still completes, protection stays off, and a warning directs you
+to **Settings → Subscribe**.
+
+On existing installations, or to finish setup, create a widget for the tracking
+hostname and enter its public site key in **Settings → Subscribe**. The app uses
+its stored runtime automation token, which requires Account: Turnstile Edit and
+Workers Scripts Edit on this account; no token entry is required in Subscribe.
+Existing operators must add these permissions to their runtime token. The app
+validates the widget and hostname, retrieves the matching secret, and configures
+the tracker before enabling protection.
+Disabling requires confirmation: it deletes the widget from Cloudflare and
+removes both keys from the tracker and the saved public key from the app.
+Other applications sharing that widget will also be affected by its deletion.
 
 ## Subscriber CSV import
 
@@ -375,10 +387,10 @@ they match the Cloudflare zone described under *Requirements*. Open the
   unsubscribe, downloads).
 - **Ingest worker name** — the worker the auto-managed Email Routing rules
   forward inbound mail to.
-- **Public signup (optional)** — to offer the hosted subscribe page (see *Public
-  signup*), create a Cloudflare **Turnstile** widget for the domain, set its
-  **site key** under *Public signup* (`TURNSTILE_SITE_KEY`), and set the secret
-  on the tracker worker (`wrangler secret put TURNSTILE_SECRET_KEY`). (The
+- **Public signup (optional)** — enable signup per newsletter. Fresh installs
+  automatically attempt Turnstile setup; use **Settings → Subscribe** to enable,
+  repair, or remove protection. The app validates and configures the widget's
+  keys; no manual Worker-secret setup is needed. (The
   `mailto:` unsubscribe fallback needs no extra routing — the bounce worker
   already receives it via the catch-all inbound route.)
 

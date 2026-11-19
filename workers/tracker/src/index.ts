@@ -10,8 +10,8 @@ export interface Env {
   LINK_SIGNING_KEY: string;
   ATTACHMENT_SIGNING_KEY: string;
   // Public signup: SEND_EMAIL delivers the double opt-in confirmation;
-  // TURNSTILE_SECRET_KEY validates the widget token. Both optional — without
-  // them the public subscribe page reports itself unavailable.
+  // TURNSTILE_SECRET_KEY validates the widget token. It is required only when
+  // Turnstile protection is enabled.
   SEND_EMAIL?: { send(message: EmailMessage): Promise<void> };
   TURNSTILE_SECRET_KEY?: string;
   // Resolved from the D1 `settings` table at runtime (see loadSettings).
@@ -200,7 +200,8 @@ async function handleSubscribe(
 
   // Signup requires SEND_EMAIL. When Turnstile is enabled it additionally
   // requires a configured site key and secret.
-  if (!env.SEND_EMAIL || (turnstileEnabled && (!siteKey || !env.TURNSTILE_SECRET_KEY))) {
+  if (!env.SEND_EMAIL || (turnstileEnabled && (!siteKey || !env.TURNSTILE_SECRET_KEY ||
+      (env.TURNSTILE_SITE_KEY && env.TURNSTILE_SITE_KEY !== siteKey)))) {
     return htmlResponse(
       pageShell(
         'Signup unavailable',

@@ -44,13 +44,17 @@ The installer asks for two API tokens restricted to the target account and zone:
   Queues Edit, Workers R2 Storage Edit, Access Organizations/Identity
   Providers/Groups Edit, Access Apps and Policies Edit, and Zero Trust Edit;
   Zone Read, Workers Routes Edit, and, for fresh installations, Zone Settings
-  Edit and Email Routing Rules Edit.
+  Edit and Email Routing Rules Edit. Add Account Turnstile Edit for automatic
+  Turnstile setup on fresh installs; failure of that optional step is non-fatal.
 - **Runtime automation token:** Account Email Sending Read, Workers Scripts
-  Read, and Zero Trust Edit; Zone Read, Email Routing Rules Edit, and Analytics
+  Edit, Turnstile Edit, and Zero Trust Edit; Zone Read, Email Routing Rules Edit, and Analytics
   Read. This token is installed as encrypted Worker secrets on fresh installs.
 
 Revoke the short-lived installation token after use; keep the runtime token
 active for application automation.
+Existing installations must upgrade Workers Scripts from Read to Edit and add
+Account Turnstile Edit to this token for Turnstile management. Settings >
+Subscribe uses the stored credential and does not ask for a token.
 
 Note: no GitHub account or repository is required.
 

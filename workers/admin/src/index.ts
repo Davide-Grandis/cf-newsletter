@@ -14,6 +14,8 @@
 import { EmailMessage } from 'cloudflare:email';
 import type { Updater } from '../../updater/src/index';
 import { boundedBytes } from '../../../shared/update-release';
+import { bindingQuery } from '../../../shared/update-state';
+import { changeTurnstile, turnstileStatus, TurnstileError } from '../../../shared/turnstile';
 import initialHelpDocument from '../../../docs/help.md';
 import {
   readWarmupConfig,
@@ -54,7 +56,7 @@ export interface Env {
   // admin worker keeps a matching Email Routing rule in sync so its
   // `inbound_address` is forwarded to the ingest worker. Best-effort: if these
   // are unset, newsletter CRUD still works and the API returns a warning.
-  CF_API_TOKEN?: string; // secret — token with "Email Routing Rules: Edit"
+  CF_API_TOKEN?: string; // secret — runtime automation, including Turnstile and tracker configuration
   // secret — account-scoped token with "Zone: Read", used only to look up the
   // Email Routing zone id from BASE_DOMAIN when the sending domain is saved.
   CF_READ_API_TOKEN?: string;
@@ -69,6 +71,9 @@ export interface Env {
   ACCESS_LIST_ID?: string; // resolved from settings (Zero Trust Emails list id)
   ALLOW_ADMIN_NEWSLETTER_CRUD?: string; // 'true' | 'false' (settings toggle)
   BRANDING_TEXT_COLOR?: string;
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_ENABLED?: string;
+  TRACKING_BASE_URL?: string;
   // Used to email a newly added console user a heads-up. Best-effort: if the
   // binding or sender is missing, user creation still succeeds with a warning.
   SEND_EMAIL?: SendEmail; // Cloudflare Email Sending binding
@@ -480,6 +485,35 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
   const auth = await resolveUser(rawEnv.DB, email);
   if (!auth) return forbidden();
   const isSuper = auth.role === 'super_admin';
+  if (p === '/api/settings/turnstile') {
+    if (!isSuper) return forbidden();
+    const headers = { 'cache-control': 'no-store' };
+    const query = bindingQuery(rawEnv.DB);
+    let hostname = '';
+    try { hostname = new URL(resolveTrackingBaseUrl(env.TRACKING_BASE_URL ?? '', env.BASE_DOMAIN ?? '')).hostname; } catch {}
+    const runtimeToken = rawEnv.CF_API_TOKEN || rawEnv.CF_READ_API_TOKEN;
+    if (m === 'GET') return Response.json(await turnstileStatus(query, env.ACCESS_ACCOUNT_ID ?? '', hostname, runtimeToken), { headers });
+    if (m !== 'PUT') return Response.json({ error: 'Method not allowed.' }, { status: 405, headers });
+    if (req.headers.get('origin') !== url.origin || req.headers.get('x-requested-with') !== 'XMLHttpRequest') {
+      return Response.json({ error: 'Turnstile changes must originate from this console.' }, { status: 403, headers });
+    }
+    try {
+      const body = JSON.parse(new TextDecoder().decode(await boundedBytes(new Response(req.body), 2048))) as {
+        enabled: boolean; siteKey: string; confirmDelete?: boolean;
+      };
+      if (!runtimeToken) throw new TurnstileError('The stored runtime API token is missing. Configure CF_API_TOKEN on the admin Worker with Account: Turnstile Edit and Workers Scripts Edit.', 503);
+      if (body.enabled && (!hostname || hostname === 'track.yourdomain.com')) throw new TurnstileError('Configure the tracking hostname before enabling Turnstile.');
+      await changeTurnstile(query, {
+        enabled: body.enabled, siteKey: body.siteKey, confirmDelete: body.confirmDelete,
+        token: runtimeToken, account: env.ACCESS_ACCOUNT_ID ?? '', hostname,
+      });
+      return Response.json({ ok: true }, { headers });
+    } catch (error) {
+      return Response.json({ error: error instanceof TurnstileError ? error.message : 'Turnstile setup could not be completed. Refresh its status and retry.' }, {
+        status: error instanceof TurnstileError ? error.status : 400, headers,
+      });
+    }
+  }
   if (p === '/api/updates' || p.startsWith('/api/updates/')) {
     if (!isSuper) return forbidden();
     if (!rawEnv.UPDATER) return Response.json({ error: 'Run the hosted updater once to provision the updater Worker.' }, { status: 503 });
@@ -602,6 +636,18 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     if (!isSuper) return forbidden();
     const body = await req.json<{ updates?: Record<string, string | null> }>();
     const updates = body.updates ?? {};
+    if ('TURNSTILE_ENABLED' in updates || 'TURNSTILE_SITE_KEY' in updates) {
+      return Response.json({ error: 'Use Settings > Subscribe to validate and configure Turnstile before enabling it, or to confirm widget deletion.' }, { status: 400 });
+    }
+    const nextTrackingUrl = resolveTrackingBaseUrl(
+      'TRACKING_BASE_URL' in updates ? updates.TRACKING_BASE_URL ?? SETTINGS_DEFAULTS.TRACKING_BASE_URL : env.TRACKING_BASE_URL ?? '',
+      'BASE_DOMAIN' in updates ? updates.BASE_DOMAIN ?? SETTINGS_DEFAULTS.BASE_DOMAIN : env.BASE_DOMAIN ?? '',
+    );
+    if (env.TURNSTILE_SITE_KEY &&
+        ((updates.ACCESS_ACCOUNT_ID !== undefined && updates.ACCESS_ACCOUNT_ID !== env.ACCESS_ACCOUNT_ID) ||
+         (nextTrackingUrl !== resolveTrackingBaseUrl(env.TRACKING_BASE_URL ?? '', env.BASE_DOMAIN ?? '')))) {
+      return Response.json({ error: 'Remove Turnstile from Settings > Subscribe before changing its Cloudflare account or tracking URL.' }, { status: 400 });
+    }
     const errors: Record<string, string> = {};
     const toSet: Array<[string, string]> = [];
     const toDelete: string[] = [];
