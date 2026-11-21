@@ -90,9 +90,9 @@ export function MailMergeEditor({
         <div>
           <h2 id="mail-merge-label" className="text-sm font-medium text-slate-900 dark:text-slate-100">Enable Mail Merge</h2>
           <p id="mail-merge-help" className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Personalize the incoming email or add a separate header. The only supported variable is{' '}
+            Address each subscriber by name with{' '}
             <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{subscriber_name}}'}</code>.
-            Missing names render as empty text.
+            It&apos;s left blank when no name is known.
           </p>
         </div>
         <button
