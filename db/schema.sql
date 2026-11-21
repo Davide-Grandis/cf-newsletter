@@ -270,3 +270,7 @@ CREATE TABLE IF NOT EXISTS update_events (
 );
 CREATE INDEX IF NOT EXISTS update_events_job ON update_events(job_id,id);
 CREATE TABLE IF NOT EXISTS update_cache (key TEXT PRIMARY KEY, value TEXT NOT NULL, checked_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS update_intents (
+  id TEXT PRIMARY KEY, release_id INTEGER NOT NULL, digest TEXT NOT NULL, version TEXT NOT NULL,
+  actor TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER
+);

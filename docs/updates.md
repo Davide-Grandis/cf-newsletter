@@ -1,29 +1,45 @@
 # Application updates
 
 In-app updates are the primary update path. A super admin opens Settings ->
-Updates, reviews the published stable GitHub release, supplies a deployment token
-if none is saved, runs preflight, confirms a database recovery point and approves
-the deployment. Regular newsletter admins cannot check or start deployments.
+Updates and reviews the published stable GitHub release. **Update with
+Cloudflare** records a single-use update intent and opens the hosted installer.
+The operator authorizes the Cloudflare account through OAuth; the installer
+verifies the intent, checks compatibility and asks for final approval before
+submitting the durable job. Regular newsletter admins cannot request updates.
 There are no unattended installations or customer-side builds.
+
+## Update intents
+
+The updater stores only the SHA-256 of a random 256-bit nonce in update_intents,
+with the reviewed release ID and digest, the console administrator's Access
+email and a 30-minute expiry. The nonce travels once, in the installer link
+(`?update=`), which the installer removes from the address bar. A new request
+supersedes unredeemed ones. For a failed job, the intent pins that job's
+original release.
+
+The hosted installer requests only update scopes for a console link. During the
+OAuth callback, it reads the intent through the authorized account's D1: an
+intent missing from that account, expired or redeemed is rejected, so the link is
+bound to the account that created it. The release is pinned to the intent even
+if a newer release is published. Deployment rechecks the intent and redeems it
+atomically before starting the job, which records the console administrator as
+its actor. The intent authorizes nothing without Cloudflare OAuth; anyone able to
+write this D1 database can already deploy, so a separate signing key adds no
+protection.
 
 ## Credentials
 
 Only the updater Worker can decrypt job credentials. Its UPDATE_PRIVATE_KEY
 secret corresponds to a public key in deployment_metadata. The hosted updater
-can encrypt a temporary credential without reading that private key.
+encrypts the temporary OAuth credential without reading that private key.
 
-CF_UPDATE_TOKEN is an optional, reusable Worker secret. The console can save,
-replace or remove it; no read-back endpoint exists. If a saved token is revoked,
-enter a valid replacement to rotate/remove it. Removing it does not disable
-in-app updates: enter a new temporary token each time instead.
-
-Each job stores an RSA-OAEP-encrypted copy of its token, bound to its job ID and
-usable for one hour. Completion/failure clears it. A ten-minute cleanup schedule
-terminates expired jobs and removes abandoned credentials. Expired ciphertext may
-remain until the next cleanup tick, but cannot be used by the update engine.
-No plaintext token is placed in Workflow parameters, step results or history.
-Cloudflare Workers Scripts Edit is account-scoped and powerful; restrict tokens
-to the intended account and revoke temporary credentials after use.
+Each job stores an RSA-OAEP-encrypted copy of its credential, bound to its job ID
+and usable for at most one hour or the OAuth token lifetime. Completion/failure
+clears it. A ten-minute cleanup schedule terminates expired jobs, removes
+abandoned credentials and deletes expired intents. No plaintext credential is
+placed in Workflow parameters, step results or history. There is no saved update
+token: the hosted installer removes the legacy CF_UPDATE_TOKEN secret, which
+older consoles could store, when it bootstraps the updater.
 
 ## Execution and recovery
 
@@ -39,12 +55,11 @@ Workers deploy sequentially; admin and its static assets deploy last.
 Installed version metadata changes only after all six active versions verify.
 
 Closing the browser does not cancel the job. Failed jobs retain their lock;
-inspect the error, correct the cause and choose Resume from checkpoint with a
-fresh token. A retry reconciles live Worker versions before uploading again.
+inspect the error, correct the cause and choose Resume with Cloudflare. A retry
+reconciles live Worker versions before uploading again.
 Do not start a separate manual deployment while a job owns the lock.
 
-The hosted updater is permanently supported and does not depend on the console
-or a saved token. Rerunning it with the same release reconnects to an active job
+The hosted updater is permanently supported and does not depend on the console. Rerunning it with the same release reconnects to an active job
 or resumes a failed one. Releases requiring a newer updater engine use the hosted
 bootstrap path; the engine is not replaced during an active application update.
 

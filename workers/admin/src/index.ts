@@ -524,12 +524,11 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     try {
       if (p === '/api/updates' && m === 'GET') return Response.json(await rawEnv.UPDATER.status(), { headers: { 'cache-control': 'no-store' } });
       if (p === '/api/updates/check' && m === 'POST') return Response.json(await rawEnv.UPDATER.status(true), { headers: { 'cache-control': 'no-store' } });
-      const body = JSON.parse(new TextDecoder().decode(await boundedBytes(new Response(req.body), 4096))) as { token?: string; releaseId: number; digest: string; recoveryConfirmed: boolean; jobId?: string; releaseLock?: boolean };
-      if (body.token !== undefined && (typeof body.token !== 'string' || body.token.length > 160)) return Response.json({ error: 'Invalid token.' }, { status: 400 });
-      if (p === '/api/updates/preflight' && m === 'POST') return Response.json(await rawEnv.UPDATER.preflight(body));
-      if (p === '/api/updates/start' && m === 'POST') return Response.json(await rawEnv.UPDATER.start(body, email), { status: 202 });
-      if (p === '/api/updates/token' && (m === 'PUT' || m === 'DELETE')) return Response.json(await rawEnv.UPDATER.credential(body.token ?? '', m === 'DELETE'));
-      if (p === '/api/updates/recover' && m === 'POST' && typeof body.jobId === 'string') return Response.json(await rawEnv.UPDATER.recover(body.jobId, body.token ?? '', email, body.releaseLock === true));
+      const body = JSON.parse(new TextDecoder().decode(await boundedBytes(new Response(req.body), 4096))) as { releaseId?: number; digest?: string; jobId?: string };
+      if (p === '/api/updates/intent' && m === 'POST') {
+        return Response.json(await rawEnv.UPDATER.intent({ releaseId: Number(body.releaseId), digest: String(body.digest ?? '') }, email), { headers: { 'cache-control': 'no-store' } });
+      }
+      if (p === '/api/updates/abandon' && m === 'POST' && typeof body.jobId === 'string') return Response.json(await rawEnv.UPDATER.abandon(body.jobId, email));
       return Response.json({ error: 'Not found.' }, { status: 404 });
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : 'Update operation failed.' }, { status: 400, headers: { 'cache-control': 'no-store' } });

@@ -2,6 +2,7 @@ import type { GitHubRelease } from './update-release';
 
 export type Query = (sql: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>>;
 export const UPDATE_TTL_MS = 60 * 60 * 1000;
+export const MAX_UPDATE_CREDENTIAL_LENGTH = 160;
 export const UPDATE_SCHEMA = `
 CREATE TABLE IF NOT EXISTS update_jobs (
   id TEXT PRIMARY KEY, source TEXT NOT NULL, actor TEXT NOT NULL,
@@ -17,7 +18,21 @@ CREATE TABLE IF NOT EXISTS update_events (
 );
 CREATE INDEX IF NOT EXISTS update_events_job ON update_events(job_id,id);
 CREATE TABLE IF NOT EXISTS update_cache (key TEXT PRIMARY KEY, value TEXT NOT NULL, checked_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS update_intents (
+  id TEXT PRIMARY KEY, release_id INTEGER NOT NULL, digest TEXT NOT NULL, version TEXT NOT NULL,
+  actor TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER
+);
 `;
+export const UPDATE_INTENT_TTL_MS = 30 * 60 * 1000;
+export const UPDATE_INTENT_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+// Only the SHA-256 of a console update nonce is stored; the nonce itself travels
+// once, in the hosted-installer link, and authorizes nothing without OAuth.
+export async function updateIntentId(nonce: string): Promise<string> {
+  if (!UPDATE_INTENT_PATTERN.test(nonce)) throw new Error('Invalid update request.');
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(nonce)));
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
 
 export interface UpdateJob {
   id: string;
@@ -76,14 +91,16 @@ export async function jobById(query: Query, id: string): Promise<UpdateJob> {
 
 export async function acquireJob(query: Query, input: {
   id: string; source: string; actor: string; release: GitHubRelease; digest: string;
-  installedVersion: string; credential: string;
+  installedVersion: string; credential: string; expiresAt?: number;
 }): Promise<void> {
+  const expiresAt = Math.min(input.expiresAt ?? Infinity, Date.now() + UPDATE_TTL_MS);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error('Update authorization expired. Provide a new credential.');
   // Never expire a deployment lock automatically: an interrupted operation must
   // be reconciled before another deployment is allowed to modify the same app.
   await query(`INSERT INTO update_jobs(id,source,actor,release_json,digest,installed_version,credential,expires_at,created_at)
     VALUES(?,?,?,?,?,?,?,?,?)`, [
     input.id, input.source, input.actor, JSON.stringify(input.release), input.digest,
-    input.installedVersion, input.credential, Date.now() + UPDATE_TTL_MS, Date.now(),
+    input.installedVersion, input.credential, expiresAt, Date.now(),
   ]);
   const lock = await query('INSERT OR IGNORE INTO update_lock(id,job_id) VALUES(1,?) RETURNING job_id', [input.id]);
   if (lock[0]?.job_id !== input.id) {
@@ -123,7 +140,7 @@ export async function credentialKeyPair(): Promise<{ publicKey: string; privateK
 }
 
 export async function encryptCredential(token: string, publicKey: string, jobId: string): Promise<string> {
-  if (!token || token.length > 160) throw new Error('Invalid update token.');
+  if (!token || token.length > MAX_UPDATE_CREDENTIAL_LENGTH) throw new Error('Invalid update token.');
   const key = await crypto.subtle.importKey('jwk', JSON.parse(publicKey), { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
   return toBase64(await crypto.subtle.encrypt({ name: 'RSA-OAEP', label: new TextEncoder().encode(jobId) }, key, new TextEncoder().encode(token)));
 }

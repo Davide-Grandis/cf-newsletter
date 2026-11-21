@@ -1,23 +1,21 @@
 import { WorkerEntrypoint, WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import {
-  UPDATER_VERSION, PRODUCT_WORKERS, assertUpdateCompatible, compareVersions, githubRelease,
+  UPDATER_VERSION, PRODUCT_WORKERS, compareVersions, githubRelease,
   releaseDigest, verifiedArtifact, type GitHubRelease, type ReleaseArtifact,
 } from '../../../shared/update-release';
 import {
-  acquireJob, bindingQuery, decryptCredential, encryptCredential, finishJob, jobById,
-  UPDATE_TTL_MS, updateEvent, type Query,
+  bindingQuery, decryptCredential, finishJob, jobById, updateEvent, updateIntentId, UPDATE_INTENT_TTL_MS, type Query,
 } from '../../../shared/update-state';
 import {
-  captureWorkers, cloudflare, deployUpdateWorker, installedVersion, loadCheckpoint,
-  prepareUpdate, saveCheckpoint, migrateUpdate, verifyUpdate, UPDATER_NAME,
+  deployUpdateWorker, installedVersion, loadCheckpoint, prepareUpdate, saveCheckpoint, migrateUpdate, verifyUpdate,
 } from '../../../shared/update-engine';
 
 type JobParams = { jobId: string };
-type StartInput = { releaseId: number; digest: string; token?: string; recoveryConfirmed: boolean };
+type IntentInput = { releaseId: number; digest: string };
+const INSTALLER_ORIGIN = 'https://installer.cf-newsletter.com';
 export interface UpdateStatus {
   installed: string;
   updaterVersion: string;
-  tokenSaved: boolean;
   release: { id: number; version: string; digest: string; publishedAt: string | null; notes: string; url: string; newer: boolean } | null;
   checkedAt: number | null;
   checkError: string | null;
@@ -26,18 +24,33 @@ export interface UpdateStatus {
 }
 
 async function publicJob(query: Query, id: string): Promise<Record<string, unknown>> {
-  const rows = await query('SELECT id,source,actor,state,phase,installed_version,created_at,finished_at,error FROM update_jobs WHERE id=?', [id]);
+  const rows = await query('SELECT id,source,actor,state,phase,installed_version,created_at,finished_at,error,digest,release_json FROM update_jobs WHERE id=?', [id]);
   const events = await query('SELECT phase,message,created_at FROM update_events WHERE job_id=? ORDER BY id DESC LIMIT 80', [id]);
-  return { ...rows[0], events: events.reverse() };
+  const { release_json: releaseJson, ...job } = rows[0] ?? {};
+  let releaseId: number | undefined;
+  try { releaseId = (JSON.parse(String(releaseJson)) as { id?: number }).id; } catch { /* Recovery stays available through the hosted installer. */ }
+  return { ...job, release_id: releaseId, events: events.reverse() };
 }
 
 async function selected(id: number, digest: string, githubToken?: string): Promise<{ release: GitHubRelease; artifact: ReleaseArtifact }> {
-  if (!Number.isSafeInteger(id) || !/^[a-f0-9]{64}$/.test(digest)) throw new Error('Run update preflight before deploying.');
+  if (!Number.isSafeInteger(id) || !/^[a-f0-9]{64}$/.test(digest)) throw new Error('The update job has no pinned release.');
   const release = await githubRelease(`/${id}`, githubToken);
   if (release.prerelease || releaseDigest(release) !== digest) throw new Error('The selected release changed or is not stable. Check for updates again.');
   const verified = await verifiedArtifact(release);
   if (!release.published_at || !Number.isFinite(Date.parse(release.published_at))) throw new Error('Release publication date is unavailable.');
   return { release, artifact: verified.artifact };
+}
+
+function installerOrigin(configured?: string): string {
+  if (!configured) return INSTALLER_ORIGIN;
+  const url = new URL(configured);
+  if (url.protocol !== 'https:' || url.origin !== configured.replace(/\/$/, '')) throw new Error('The configured installer origin is invalid.');
+  return url.origin;
+}
+
+function nonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 export class Updater extends WorkerEntrypoint<UpdaterBindings> {
@@ -66,7 +79,7 @@ export class Updater extends WorkerEntrypoint<UpdaterBindings> {
     const release = data.release;
     const locked = (await query('SELECT job_id FROM update_lock WHERE id=1'))[0]?.job_id;
     return {
-      installed, updaterVersion: UPDATER_VERSION, tokenSaved: Boolean(this.env.CF_UPDATE_TOKEN),
+      installed, updaterVersion: UPDATER_VERSION,
       release: release ? {
         id: release.id, version: release.tag_name.replace(/^v/, ''), digest: releaseDigest(release),
         publishedAt: release.published_at, notes: (release.body ?? '').slice(0, 30_000),
@@ -79,79 +92,56 @@ export class Updater extends WorkerEntrypoint<UpdaterBindings> {
     };
   }
 
-  async preflight(input: StartInput): Promise<{ version: string; migrations: string[]; workers: number; recoveryRequired: boolean }> {
-    const query = bindingQuery(this.env.DB);
-    if ((await query('SELECT job_id FROM update_lock WHERE id=1')).length) throw new Error('An update is active or requires recovery.');
-    const { artifact } = await selected(input.releaseId, input.digest, this.env.GITHUB_TOKEN);
-    const installed = await installedVersion(query);
-    assertUpdateCompatible(artifact, installed);
-    const token = input.token?.trim() || this.env.CF_UPDATE_TOKEN;
-    if (!token) throw new Error('Enter an update token to continue.');
-    await captureWorkers(token, this.env.ACCOUNT_ID, this.env.DATABASE_ID, artifact, installed);
-    const applied = new Set((await query('SELECT version FROM schema_migrations')).map((row) => row.version));
-    return { version: artifact.manifest.version, migrations: artifact.migrations.filter((item) => !applied.has(item.id)).map((item) => item.description), workers: PRODUCT_WORKERS.length, recoveryRequired: true };
-  }
-
-  async start(input: StartInput, actor: string): Promise<{ jobId: string }> {
-    if (input.recoveryConfirmed !== true) throw new Error('Confirm that a database backup/recovery point is available.');
-    const { release, artifact } = await selected(input.releaseId, input.digest, this.env.GITHUB_TOKEN);
-    const query = bindingQuery(this.env.DB);
-    const installed = await installedVersion(query);
-    assertUpdateCompatible(artifact, installed);
-    const token = input.token?.trim() || this.env.CF_UPDATE_TOKEN;
-    if (!token) throw new Error('Enter an update token to continue.');
-    const key = String((await query("SELECT value FROM deployment_metadata WHERE key='updater_public_key'"))[0]?.value ?? '');
-    const jobId = crypto.randomUUID();
-    const credential = await encryptCredential(token, key, jobId);
-    await acquireJob(query, { id: jobId, source: 'console', actor, release, digest: input.digest, installedVersion: installed, credential });
-    await saveCheckpoint(query, jobId, { recoveryConfirmed: true });
-    try { await this.env.UPDATE_WORKFLOW.create({ id: jobId, params: { jobId } }); }
-    catch { await finishJob(query, jobId, 'Could not start the Workflow. Resume the update after checking its status.'); throw new Error('Could not start the update. Check update history before retrying.'); }
-    return { jobId };
-  }
-
-  async credential(token: string, remove = false): Promise<{ saved: boolean }> {
-    const query = bindingQuery(this.env.DB);
-    if ((await query('SELECT job_id FROM update_lock WHERE id=1')).length) throw new Error('Finish or recover the active update before changing credentials.');
-    const value = token.trim() || this.env.CF_UPDATE_TOKEN;
-    if (!value) throw new Error('Enter a token with Workers Scripts Edit permission.');
-    if (!remove) {
-      await cloudflare(value, `/accounts/${this.env.ACCOUNT_ID}/workers/scripts/${UPDATER_NAME}/settings`);
-      await cloudflare(value, `/accounts/${this.env.ACCOUNT_ID}/workers/scripts/${UPDATER_NAME}/secrets`, {
-        method: 'PUT', body: JSON.stringify({ name: 'CF_UPDATE_TOKEN', type: 'secret_text', text: value }),
-      });
-    } else {
-      await cloudflare(value, `/accounts/${this.env.ACCOUNT_ID}/workers/scripts/${UPDATER_NAME}/secrets/CF_UPDATE_TOKEN`, { method: 'DELETE' });
+  // Records a single-use request that the hosted installer redeems only after
+  // the operator authorizes this account through Cloudflare OAuth. The console
+  // never receives, stores or forwards a Cloudflare credential.
+  async intent(input: IntentInput, actor: string): Promise<{ url: string; expiresAt: number; recovery: boolean }> {
+    if (!Number.isSafeInteger(input?.releaseId) || input.releaseId <= 0 || !/^[a-f0-9]{64}$/.test(String(input?.digest ?? ''))) {
+      throw new Error('Check for updates again before continuing.');
     }
-    return { saved: !remove };
+    if (typeof actor !== 'string' || !actor || actor.length > 320) throw new Error('The console administrator could not be identified.');
+    const query = bindingQuery(this.env.DB);
+    const installed = await installedVersion(query);
+    const locked = (await query('SELECT j.state,j.release_json,j.digest FROM update_lock l JOIN update_jobs j ON j.id=l.job_id WHERE l.id=1'))[0];
+    let release: { id: number; digest: string; version: string };
+    if (locked) {
+      if (locked.state !== 'failed') throw new Error('An update is already in progress. Follow its progress on this page.');
+      const pinned = JSON.parse(String(locked.release_json)) as GitHubRelease;
+      release = { id: pinned.id, digest: String(locked.digest), version: pinned.tag_name.replace(/^v/, '') };
+    } else {
+      const cached = (await query("SELECT value FROM update_cache WHERE key='release'"))[0];
+      const latest = cached ? (JSON.parse(String(cached.value)) as { release?: GitHubRelease }).release : undefined;
+      if (!latest || latest.prerelease) throw new Error('Check for updates again before continuing.');
+      release = { id: latest.id, digest: releaseDigest(latest), version: latest.tag_name.replace(/^v/, '') };
+      if (compareVersions(release.version, installed) <= 0) throw new Error(`cf-newsletter ${installed} is already up to date.`);
+    }
+    if (release.id !== input.releaseId || release.digest !== input.digest) throw new Error('The available release changed. Review it again before updating.');
+    const origin = installerOrigin(this.env.INSTALLER_ORIGIN);
+    const value = nonce(), now = Date.now(), expiresAt = now + UPDATE_INTENT_TTL_MS;
+    // A new request supersedes every unredeemed link; redeemed rows are kept briefly for audit.
+    await query('DELETE FROM update_intents WHERE used_at IS NULL OR created_at<?', [now - 30 * 24 * 60 * 60_000]);
+    await query('INSERT INTO update_intents(id,release_id,digest,version,actor,created_at,expires_at) VALUES(?,?,?,?,?,?,?)', [
+      await updateIntentId(value), release.id, release.digest, release.version, actor, now, expiresAt,
+    ]);
+    const url = new URL('/', origin);
+    url.searchParams.set('update', value);
+    return { url: url.toString(), expiresAt, recovery: Boolean(locked) };
   }
 
-  async recover(id: string, token: string, actor: string, releaseLock = false): Promise<{ jobId: string }> {
+  // Operator escape hatch: abandons a failed job and releases the lock without
+  // touching deployed Workers. It needs no Cloudflare credential.
+  async abandon(id: string, actor: string): Promise<{ jobId: string }> {
     const query = bindingQuery(this.env.DB);
     const job = await jobById(query, id);
-    if (job.state !== 'failed') throw new Error('Only a failed update can be recovered.');
+    if (job.state !== 'failed') throw new Error('Only a failed update can be abandoned.');
     if ((await query('SELECT job_id FROM update_lock WHERE id=1'))[0]?.job_id !== id) throw new Error('This job no longer owns the deployment lock.');
-    // Terminate the old instance first; never release a lock while an instance
-    // could still be retrying a deployment in the background.
+    // Never release a lock while an instance could still be retrying a deployment in the background.
     const previousInstance = String((await query('SELECT value FROM deployment_metadata WHERE key=?', [`update_instance_${id}`]))[0]?.value ?? id);
     try { await (await this.env.UPDATE_WORKFLOW.get(previousInstance)).terminate(); }
     catch { throw new Error('Could not verify that the old Workflow stopped. Use the hosted updater for recovery.'); }
-    if (releaseLock) {
-      await query("UPDATE update_jobs SET state='abandoned',credential=NULL WHERE id=?", [id]);
-      await query('DELETE FROM update_lock WHERE id=1 AND job_id=?', [id]);
-      return { jobId: id };
-    }
-    const value = token.trim() || this.env.CF_UPDATE_TOKEN;
-    if (!value) throw new Error('Enter a fresh update token.');
-    const key = String((await query("SELECT value FROM deployment_metadata WHERE key='updater_public_key'"))[0]?.value ?? '');
-    // Workflow IDs are immutable. A recovery instance has a fresh ID, but
-    // operates on the original durable job/checkpoint.
-    await query("UPDATE update_jobs SET state='queued',error=NULL,credential=?,expires_at=? WHERE id=?", [await encryptCredential(value, key, id), Date.now() + UPDATE_TTL_MS, id]);
-    const instanceId = `${id}-r-${crypto.randomUUID().slice(0, 8)}`;
-    await query("INSERT INTO deployment_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [`update_instance_${id}`, instanceId]);
-    await updateEvent(query, id, 'recovering', `Recovery requested by ${actor}.`);
-    try { await this.env.UPDATE_WORKFLOW.create({ id: instanceId, params: { jobId: id } }); }
-    catch { await finishJob(query, id, 'Could not start recovery. Retry with a fresh token.'); throw new Error('Could not start update recovery.'); }
+    await updateEvent(query, id, 'abandoned', `Abandoned by ${actor}; deployed Workers were left unchanged.`);
+    await query("UPDATE update_jobs SET state='abandoned',credential=NULL WHERE id=?", [id]);
+    await query('DELETE FROM update_lock WHERE id=1 AND job_id=?', [id]);
     return { jobId: id };
   }
 }
@@ -208,8 +198,11 @@ export default {
       const id = String(row.id);
       const instance = String((await query('SELECT value FROM deployment_metadata WHERE key=?', [`update_instance_${id}`]))[0]?.value ?? id);
       try { await (await env.UPDATE_WORKFLOW.get(instance)).terminate(); } catch { /* The lock remains held for operator recovery. */ }
-      await finishJob(query, id, 'Temporary credential expired. Resume with a fresh token.');
+      await finishJob(query, id, 'Cloudflare authorization expired. Resume with Cloudflare from Settings > Updates.');
       await env.ARCHIVE.delete(`_updates/${id}/artifact.json`);
     }
+    // The table appears with migration 0006, which runs after this engine is bootstrapped.
+    try { await query('DELETE FROM update_intents WHERE (used_at IS NULL AND expires_at<?) OR created_at<?', [Date.now(), Date.now() - 30 * 24 * 60 * 60_000]); }
+    catch { /* Retried on the next schedule after migrations apply. */ }
   },
 } satisfies ExportedHandler<UpdaterBindings>;

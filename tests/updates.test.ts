@@ -4,10 +4,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import {
   acquireJob, bindingQuery, credentialKeyPair, decryptCredential, encryptCredential,
-  finishJob, jobById, UPDATE_SCHEMA, sqlStatements,
+  finishJob, jobById, UPDATE_SCHEMA, sqlStatements, updateIntentId, UPDATE_INTENT_TTL_MS,
 } from '../shared/update-state';
 import { compareVersions, boundedBytes, validateArtifact, assertUpdateCompatible, type ReleaseArtifact } from '../shared/update-release';
-import { deploymentMetadata } from '../shared/update-engine';
+import { deploymentMetadata, saveCheckpoint } from '../shared/update-engine';
 import { Updater, UpdateWorkflow } from '../workers/updater/src/index';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -188,14 +188,20 @@ test('deployment metadata preserves custom vars and internal updater binding but
   assert.ok(JSON.stringify(metadata).includes('Updater'));
 });
 
+// Mirrors what the hosted installer stores after Cloudflare OAuth: the console never supplies a credential.
+async function hostedJob(f: Awaited<ReturnType<typeof fixture>>, id = crypto.randomUUID()) {
+  await acquireJob(f.query, {
+    id, source: 'console', actor: 'admin@example.com', release: f.release as never, digest: f.digest,
+    installedVersion: '2.4.0', credential: await encryptCredential(testToken, f.keys.publicKey, id),
+  });
+  await saveCheckpoint(f.query, id, { recoveryConfirmed: true });
+  return id;
+}
+
 test('a durable update deploys all six Workers, admin last, and removes credential and lock only after verification', async () => {
   const f = await fixture();
   try {
-    const input = { releaseId: 42, digest: f.digest, token: testToken, recoveryConfirmed: true };
-    assert.equal((await f.api.preflight(input)).workers, 6);
-    const { jobId } = await f.api.start(input, 'admin@example.com');
-    assert.deepEqual(f.instances[0], { id: jobId, params: { jobId } });
-    assert.ok(!JSON.stringify(f.instances).includes(testToken));
+    const jobId = await hostedJob(f);
     await f.workflow.run({ payload: { jobId } } as never, f.step as never);
     assert.deepEqual(f.deployments, names);
     const job = await jobById(f.query, jobId);
@@ -207,18 +213,17 @@ test('a durable update deploys all six Workers, admin last, and removes credenti
   } finally { f.network.mock.restore(); f.sqlite.close(); }
 });
 
-test('partial failure preserves checkpoints and installed version; recovery does not redeploy completed Workers', async () => {
+test('partial failure preserves checkpoints and installed version; a re-authorized job does not redeploy completed Workers', async () => {
   const f = await fixture('consumer');
   try {
-    const { jobId } = await f.api.start({ releaseId: 42, digest: f.digest, token: testToken, recoveryConfirmed: true }, 'admin@example.com');
+    const jobId = await hostedJob(f);
     await assert.rejects(f.workflow.run({ payload: { jobId } } as never, f.step as never));
     const job = await jobById(f.query, jobId);
     assert.equal(job.state, 'failed');
     assert.equal(job.credential, null);
     assert.ok(JSON.parse(job.checkpoint).workers.ingest.deployedVersion);
     assert.equal((await f.query("SELECT value FROM deployment_metadata WHERE key='product_version'"))[0]!.value, '2.4.0');
-    await f.api.recover(jobId, testToken, 'admin@example.com');
-    assert.ok(f.instances[1]!.id.startsWith(`${jobId}-r-`));
+    await f.query("UPDATE update_jobs SET state='queued',error=NULL,credential=?,expires_at=? WHERE id=?", [await encryptCredential(testToken, f.keys.publicKey, jobId), Date.now() + 60_000, jobId]);
     f.clearFailure();
     await f.workflow.run({ payload: { jobId } } as never, f.step as never);
     assert.deepEqual(f.deployments, names);
@@ -226,14 +231,77 @@ test('partial failure preserves checkpoints and installed version; recovery does
   } finally { f.network.mock.restore(); f.sqlite.close(); }
 });
 
-test('a saved token starts the same durable flow without requesting a per-update token', async () => {
+test('the console records a hashed, single-use update intent and links to the hosted installer without any credential', async () => {
   const f = await fixture();
   try {
-    Object.assign(f.env, { CF_UPDATE_TOKEN: testToken });
-    const input = { releaseId: 42, digest: f.digest, recoveryConfirmed: true };
-    assert.equal((await f.api.preflight(input)).workers, 6);
-    const { jobId } = await f.api.start(input, 'admin@example.com');
-    assert.equal(await decryptCredential(await jobById(f.query, jobId), f.keys.privateKey), testToken);
-    assert.ok(!JSON.stringify(await f.api.status()).includes(testToken));
+    const status = await f.api.status(true);
+    assert.equal(status.release?.newer, true);
+    assert.ok(!('tokenSaved' in status));
+    const before = Date.now();
+    const intent = await f.api.intent({ releaseId: 42, digest: f.digest }, 'admin@example.com');
+    const url = new URL(intent.url);
+    assert.equal(url.origin, 'https://installer.cf-newsletter.com');
+    const nonce = url.searchParams.get('update')!;
+    assert.match(nonce, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(intent.recovery, false);
+    assert.ok(intent.expiresAt >= before + UPDATE_INTENT_TTL_MS && intent.expiresAt <= Date.now() + UPDATE_INTENT_TTL_MS);
+    const rows = await f.query('SELECT * FROM update_intents');
+    assert.equal(rows.length, 1);
+    assert.deepEqual({ ...rows[0] }, {
+      id: await updateIntentId(nonce), release_id: 42, digest: f.digest, version: '2.5.0', actor: 'admin@example.com',
+      created_at: rows[0]!.created_at, expires_at: intent.expiresAt, used_at: null,
+    });
+    assert.ok(!JSON.stringify(rows).includes(nonce), 'Only the nonce hash is stored');
+    const second = await f.api.intent({ releaseId: 42, digest: f.digest }, 'other@example.com');
+    const remaining = await f.query('SELECT id,actor FROM update_intents');
+    assert.deepEqual(remaining.map(row => ({ ...row })), [{ id: await updateIntentId(new URL(second.url).searchParams.get('update')!), actor: 'other@example.com' }], 'A new request supersedes unredeemed links');
+    await f.query('UPDATE update_intents SET used_at=?', [Date.now()]);
+    await f.api.intent({ releaseId: 42, digest: f.digest }, 'admin@example.com');
+    assert.equal((await f.query('SELECT * FROM update_intents WHERE used_at IS NOT NULL')).length, 1, 'Redeemed requests are retained for audit');
+    assert.equal(f.instances.length, 0, 'Recording an intent never starts a deployment');
+  } finally { f.network.mock.restore(); f.sqlite.close(); }
+});
+
+test('update intents bind the reviewed release and refuse stale, current, running, or malformed requests', async () => {
+  const f = await fixture();
+  try {
+    await assert.rejects(f.api.intent({ releaseId: 42, digest: f.digest }, 'admin@example.com'), /Check for updates again/);
+    await f.api.status(true);
+    await assert.rejects(f.api.intent({ releaseId: 42, digest: '0'.repeat(64) }, 'admin@example.com'), /release changed/);
+    await assert.rejects(f.api.intent({ releaseId: 41, digest: f.digest }, 'admin@example.com'), /release changed/);
+    await assert.rejects(f.api.intent({ releaseId: 42, digest: 'not-a-digest' }, 'admin@example.com'), /Check for updates again/);
+    await assert.rejects(f.api.intent({ releaseId: 42, digest: f.digest }, ''), /administrator could not be identified/);
+    await f.query("UPDATE deployment_metadata SET value='2.5.0' WHERE key='product_version'");
+    await assert.rejects(f.api.intent({ releaseId: 42, digest: f.digest }, 'admin@example.com'), /already up to date/);
+    await f.query("UPDATE deployment_metadata SET value='2.4.0' WHERE key='product_version'");
+    const jobId = await hostedJob(f);
+    await assert.rejects(f.api.intent({ releaseId: 42, digest: f.digest }, 'admin@example.com'), /already in progress/);
+    await finishJob(f.query, jobId, 'Simulated failure.');
+    const recovery = await f.api.intent({ releaseId: 42, digest: f.digest }, 'admin@example.com');
+    assert.equal(recovery.recovery, true, 'A failed job is resumed with its original release');
+    const status = await f.api.status();
+    assert.equal(status.activeJob?.release_id, 42);
+    assert.equal(status.activeJob?.digest, f.digest);
+    assert.ok(!('release_json' in status.activeJob!));
+    Object.assign(f.env, { INSTALLER_ORIGIN: 'https://installer-dev.cf-newsletter.com' });
+    assert.equal(new URL((await f.api.intent({ releaseId: 42, digest: f.digest }, 'admin@example.com')).url).origin, 'https://installer-dev.cf-newsletter.com');
+    for (const origin of ['http://installer.example', 'https://installer.example/path', 'javascript:alert(1)']) {
+      Object.assign(f.env, { INSTALLER_ORIGIN: origin });
+      await assert.rejects(f.api.intent({ releaseId: 42, digest: f.digest }, 'admin@example.com'));
+    }
+    assert.equal(f.instances.length, 0);
+  } finally { f.network.mock.restore(); f.sqlite.close(); }
+});
+
+test('abandoning a failed job stops its Workflow and releases the lock without a credential', async () => {
+  const f = await fixture();
+  try {
+    const jobId = await hostedJob(f);
+    await assert.rejects(f.api.abandon(jobId, 'admin@example.com'), /Only a failed update/);
+    await finishJob(f.query, jobId, 'Simulated failure.');
+    await f.api.abandon(jobId, 'admin@example.com');
+    assert.deepEqual(f.terminated, [jobId]);
+    assert.equal((await jobById(f.query, jobId)).state, 'abandoned');
+    assert.equal((await f.query('SELECT * FROM update_lock')).length, 0);
   } finally { f.network.mock.restore(); f.sqlite.close(); }
 });

@@ -33,25 +33,33 @@ independently managed.
 
 Before running the browser-based installer, the target Cloudflare account must have:
 
-- a domain added as an active Cloudflare authoritative DNS zone (primary/full setup) without an existing email service/MX records;
+- an active Cloudflare authoritative DNS zone (primary/full setup), with either no apex MX records or correctly configured Cloudflare Email Routing;
 - Workers, D1, R2 and Queues available;
 - Email Sending and Email Routing available for the zone;
 - Zero Trust Access available.
 
-The installer asks for two API tokens restricted to the target account and zone:
+The installer uses **Connect to Cloudflare** for temporary installation/update
+authorization. Customers do not register an OAuth application or create an
+installation API token. Their Cloudflare account must allow public OAuth
+authorization, and their role must permit the requested deployment operations.
+Installation and hosted updates share one publisher OAuth client. Both request
+the broader installation permissions, including Workers Admin, even for routine
+updates; OAuth does not grant access beyond the authorizing user's effective role.
+The installer detects installation versus update automatically. Account choices
+come from OAuth: a single account is selected automatically, or you choose by
+account name when several are authorized. No manual account ID is required.
+Fresh installs offer the selected account's eligible zones in a dropdown.
+Updates skip zone selection and preserve the domain from the installed settings.
 
-- **Short-lived installation token:** Account Workers Scripts Edit, D1 Edit,
-  Queues Edit, Workers R2 Storage Edit, Access Organizations/Identity
-  Providers/Groups Edit, Access Apps and Policies Edit, and Zero Trust Edit;
-  Zone Read, Workers Routes Edit, and, for fresh installations, Zone Settings
-  Edit and Email Routing Rules Edit. Add Account Turnstile Edit for automatic
-  Turnstile setup on fresh installs; failure of that optional step is non-fatal.
-- **Runtime automation token:** Account Email Sending Read, Workers Scripts
-  Edit, Turnstile Edit, and Zero Trust Edit; Zone Read, Email Routing Rules Edit, and Analytics
-  Read. This token is installed as encrypted Worker secrets on fresh installs.
+Fresh installation still requires a **runtime automation token**, restricted
+to the target account and zone: Account Email Sending Read, Workers Scripts
+Edit, Turnstile Edit, and Zero Trust Edit; Zone Read, Email Routing Rules Edit, and Analytics
+Read. This token is installed as encrypted Worker secrets on fresh installs.
 
-Revoke the short-lived installation token after use; keep the runtime token
-active for application automation.
+OAuth installation authorization is temporary and is not saved for future
+updates. Keep the runtime token active for application automation.
+Fresh installs request optional Turnstile authorization; setup failure is
+non-fatal and leaves a warning directing the administrator to Settings > Subscribe.
 Existing installations must upgrade Workers Scripts from Read to Edit and add
 Account Turnstile Edit to this token for Turnstile management. Settings >
 Subscribe uses the stored credential and does not ask for a token.
@@ -70,28 +78,31 @@ the selected domain if necessary, and wait for DNS/DKIM to become active.
 
 ### Updates
 
-Open **Settings -> Updates** in the console to check releases, review changes,
-run preflight and approve an update. Updates are never installed automatically.
-Enter a temporary Cloudflare token with **Workers Scripts Edit** on the target
-account, or explicitly save a dedicated update token on the updater Worker.
-Saving a token is optional; in-app updates are not. This permission can modify
-other Workers in the same account.
+Open **Settings -> Updates** in the console to check releases and review
+changes. Updates are never installed automatically. **Update with Cloudflare**
+records a single-use update request and continues on the
+[hosted installer](https://installer.cf-newsletter.com/), where you sign in to
+Cloudflare as an Administrator or Super Administrator of this account. The
+installer checks compatibility, asks for final confirmation and starts the update;
+progress and history remain visible in the console. No API token is entered or
+stored. A failed update is resumed the same way with **Resume with Cloudflare**.
 
-Temporary update credentials are encrypted in the target account, expire after
-one hour, and are removed on completion or failure. A cleanup schedule removes
-expired credentials from abandoned jobs. Credentials never appear in Workflow
-parameters, logs or update history. Revoke temporary tokens after use.
+The temporary OAuth credential is encrypted in the target account for the job,
+expires no later than one hour, and is removed on completion or failure. It never
+appears in Workflow parameters, logs or update history.
 
-The [hosted installer/updater](https://installer.cf-newsletter.com/) remains a
-supported alternative indefinitely, including when the console is unavailable.
-Existing installations need one hosted bootstrap update to create the updater.
-Hosted updates use a newly supplied installation token, not a saved update token;
-existing runtime secrets and saved update credentials are preserved.
+The hosted installer/updater can also be opened directly, including when the
+console is unavailable. Existing installations need one hosted bootstrap update
+to create the updater. Releases that use console OAuth updates require updater
+engine 1.1.0, so consoles running older releases update once through the hosted
+installer. That update
+removes any previously saved update token from the updater Worker. Revoke such
+tokens in the Cloudflare dashboard.
 
 Back up D1 or verify a recovery point before updating. Routine updates preserve
 bindings, resource IDs/locality, secrets, settings, routes, schedules and Queues.
-Failures retain a deployment lock and per-Worker checkpoints; resume with a fresh
-token from the console or hosted updater. Rolling back code does not restore D1
+Failures retain a deployment lock and per-Worker checkpoints; resume with
+Cloudflare from the console or the hosted updater. Rolling back code does not restore D1
 data. Legacy migrations, destructive schema changes and unsupported infrastructure
 changes require explicit manual intervention.
 
