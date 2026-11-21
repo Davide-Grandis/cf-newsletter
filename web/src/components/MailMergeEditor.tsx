@@ -100,7 +100,7 @@ export function MailMergeEditor({
                 <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{v}</code>
               </span>
             ))}
-            .
+            . A missing value is left blank.
           </p>
         </div>
         <button
