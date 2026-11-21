@@ -170,7 +170,11 @@ the file bytes from R2, logs `type='download'`, and streams the file.
 
 ## 7. Disabling tracking
 
-Tracking is **opt-out per deployment** via the `TRACKING_ENABLED` setting.
+Tracking is controlled per deployment via the `TRACKING_ENABLED` setting, and
+per subscriber via `subscribers.tracking_consent` (default `0`). The consumer
+instruments a recipient's copy only when both are on; consents are read once
+per queue batch at send time (`getTrackingConsents()` in `shared/db.ts`), so a
+withdrawal takes effect even for campaigns already queued.
 
 When `TRACKING_ENABLED = false`:
 

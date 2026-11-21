@@ -55,7 +55,11 @@ export class ApiError extends Error {
 export interface Subscriber {
   id: number;
   email: string;
-  name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  full_name: string | null;
+  tracking_consent: 0 | 1;
+  tracking_consent_at: string | null;
   verified: 0 | 1;
   status: 'active' | 'unsubscribed' | 'bounced' | 'complained';
   bounce_count: number;

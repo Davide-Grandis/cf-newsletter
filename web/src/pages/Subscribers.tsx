@@ -7,8 +7,8 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PAGE_SIZE, Pagination } from '../components/Pagination';
 import { fmtDate } from '../utils/date';
 
-type SortKey = 'email' | 'name' | 'status' | 'verified' | 'bounce_count' | 'subscribed_at';
-type ImportResult = { added: number; duplicated: number };
+type SortKey = 'email' | 'full_name' | 'status' | 'verified' | 'tracking_consent' | 'bounce_count' | 'subscribed_at';
+type ImportResult = { added: number; duplicated: number; rejected: number };
 
 export default function Subscribers({
   newsletterId,
@@ -99,14 +99,16 @@ export default function Subscribers({
     const date = new Date();
     const csv = [
       '# Email: required; unique subscriber email address',
-      '# Name: optional; subscriber display name',
+      '# First name: required; rows without a first name are rejected',
+      '# Last name: optional',
       '# Verified: optional; True/False, 1/0 or yes/no (defaults to False)',
       '# Date subscribed: optional; UTC YYYY-MM-DD HH:MM:SS (defaults to import time)',
-      '# Example record (not imported): alice@example.com,Alice,True,2026-05-01 09:00:00',
+      '# Tracking consent: optional; True/False, 1/0 or yes/no (defaults to False). Only set True if the subscriber opted in to open/click tracking',
+      '# Example record (not imported): alice@example.com,Alice,Smith,True,2026-05-01 09:00:00,False',
       '# Existing email addresses and duplicates in this file are skipped; subscribers are not overwritten',
       `# Generated at: ${date.toISOString()}`,
       `# cf-newsletter version: ${import.meta.env.VITE_PRODUCT_VERSION}`,
-      'Email,Name,Verified,Date subscribed',
+      'Email,First name,Last name,Verified,Date subscribed,Tracking consent',
     ].join('\r\n') + '\r\n';
     const href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
@@ -238,6 +240,7 @@ export default function Subscribers({
             <div className="mt-3 space-y-1 text-sm text-slate-700 dark:text-slate-200">
               <div>Subscribers added: <span className="font-semibold">{importResult.added}</span></div>
               <div>Duplicated: <span className="font-semibold">{importResult.duplicated}</span></div>
+              <div>Rejected (missing first name): <span className="font-semibold">{importResult.rejected}</span></div>
             </div>
             <div className="mt-4 flex justify-end">
               <button
@@ -265,20 +268,21 @@ export default function Subscribers({
         <table className="w-full table-fixed text-sm">
           <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
             <tr>
-              <Th label="Email" title="Subscriber's email address (unique per newsletter)." sortKey="email" sort={sort} onSort={toggleSort} className="w-[24%]" />
-              <Th label="Name" title="Subscriber's display name (optional)." sortKey="name" sort={sort} onSort={toggleSort} className="w-[22%]" />
+              <Th label="Email" title="Subscriber's email address (unique per newsletter)." sortKey="email" sort={sort} onSort={toggleSort} className="w-[22%]" />
+              <Th label="Name" title="Subscriber's full name: first name (required) and last name (optional)." sortKey="full_name" sort={sort} onSort={toggleSort} className="w-[19%]" />
               <Th label="Status" title="Delivery state: active subscribers receive sends; unsubscribed, bounced and complained are excluded." sortKey="status" sort={sort} onSort={toggleSort} className="w-[9%]" />
               <Th label="Verified" title="Whether the email address has been confirmed. Defaults to False for new subscribers." sortKey="verified" sort={sort} onSort={toggleSort} className="w-[8%]" />
-              <Th label="Bounces" title="Number of times mail to this address has bounced." sortKey="bounce_count" sort={sort} onSort={toggleSort} align="right" className="w-[9%]" />
-              <Th label="Date subscribed" title="When the subscriber was added to the list." sortKey="subscribed_at" sort={sort} onSort={toggleSort} className="w-[20%] pl-8" />
-              <th className="p-2 w-[14%]" />
+              <Th label="Tracking" title="Whether the subscriber consented to open/click tracking. Tracking applies only when it is also enabled in Settings." sortKey="tracking_consent" sort={sort} onSort={toggleSort} className="w-[8%]" />
+              <Th label="Bounces" title="Number of times mail to this address has bounced." sortKey="bounce_count" sort={sort} onSort={toggleSort} align="right" className="w-[8%]" />
+              <Th label="Date subscribed" title="When the subscriber was added to the list." sortKey="subscribed_at" sort={sort} onSort={toggleSort} className="w-[14%] pl-8" />
+              <th className="p-2 w-[12%]" />
             </tr>
           </thead>
           <tbody>
             {rows.map((s) => (
               <tr key={s.id} className="border-t border-slate-100 dark:border-slate-800">
                 <td className="p-2 font-mono text-xs truncate">{s.email}</td>
-                <td className="p-2 truncate">{s.name ?? '—'}</td>
+                <td className="p-2 truncate">{s.full_name ?? '—'}</td>
                 <td className="p-2">
                   <StatusPill status={s.status} />
                 </td>
@@ -292,6 +296,19 @@ export default function Subscribers({
                   >
                     {s.verified === 1 ? 'True' : 'False'}
                   </span>
+                </td>
+                <td className="p-2">
+                  <Tooltip text={s.tracking_consent === 1 ? `Consent given ${fmtDate(s.tracking_consent_at) || ''}`.trim() : 'No consent: emails are sent without tracking'}>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${
+                        s.tracking_consent === 1
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                          : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                      }`}
+                    >
+                      {s.tracking_consent === 1 ? 'True' : 'False'}
+                    </span>
+                  </Tooltip>
                 </td>
                 <td className="p-2 text-right">
                   <span className="inline-flex items-center gap-1.5 justify-end">

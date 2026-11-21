@@ -55,7 +55,12 @@ CREATE TABLE IF NOT EXISTS subscribers (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   newsletter_id   TEXT NOT NULL REFERENCES newsletters(id) ON DELETE CASCADE,
   email           TEXT NOT NULL,
-  name            TEXT,
+  first_name      TEXT,
+  last_name       TEXT,
+  full_name       TEXT GENERATED ALWAYS AS
+                    (NULLIF(TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), '')) VIRTUAL,
+  tracking_consent    INTEGER NOT NULL DEFAULT 0 CHECK (tracking_consent IN (0,1)),
+  tracking_consent_at TEXT,
   verified        INTEGER NOT NULL DEFAULT 0 CHECK (verified IN (0,1)),
   status          TEXT NOT NULL DEFAULT 'active'
                     CHECK (status IN ('active','unsubscribed','bounced','complained')),

@@ -10,13 +10,14 @@ import {
   writeLog,
   countSentSince,
   computeDemand,
+  getTrackingConsents,
   loadWarmupState,
   advanceWarmupState,
   saveDailyCap,
 } from '../../../shared/db';
 import { instrumentHtml, unsubscribeUrl, signDownloadUrl, mailtoUnsubscribeAddress } from '../../../shared/tracking';
 import { resolveFooter, renderFooterHtml, renderFooterText } from '../../../shared/footer';
-import { applyMailMerge } from '../../../shared/mail-merge';
+import { applyMailMerge, fullName } from '../../../shared/mail-merge';
 import type { QueueMessage } from '../../../shared/types';
 import {
   readWarmupConfig,
@@ -200,18 +201,22 @@ export default {
           continue;
         }
 
+        const consents = env.TRACKING_ENABLED === 'false'
+          ? new Set<number>()
+          : await getTrackingConsents(env.DB, recipients.map((r) => r.subscriberId));
         let sentInBatch = 0;
         let failedInBatch = 0;
         for (const r of recipients) {
           try {
             const mergeIncoming = campaign.mail_merge_incoming === 1;
+            const vars = { first_name: r.first_name, last_name: r.last_name };
             let body = { html: campaign.html ?? '', text: campaign.text ?? '' };
-            if (mergeIncoming) body = applyMailMerge(campaign, r.name, body.html, body.text);
-            let html = await renderRecipientHtml(env, { ...campaign, html: body.html }, allAtts, r.subscriberId);
+            if (mergeIncoming) body = applyMailMerge(campaign, vars, body.html, body.text);
+            let html = await renderRecipientHtml(env, { ...campaign, html: body.html }, allAtts, r.subscriberId, consents.has(r.subscriberId));
             let text = body.text;
             // Incoming placeholders are resolved before tracking; the separate
             // header stays outside tracking, matching the existing prepend mode.
-            if (!mergeIncoming) ({ html, text } = applyMailMerge(campaign, r.name, html, text));
+            if (!mergeIncoming) ({ html, text } = applyMailMerge(campaign, vars, html, text));
             const unsubUrl = unsubscribeUrl(env.TRACKING_BASE_URL, r.subscriberId, r.token, campaignId);
             // Append the footer AFTER tracking instrumentation so its
             // unsubscribe/author links are never click-rewritten. The footer is
@@ -238,7 +243,7 @@ export default {
 
             const raw = buildEmail({
               from: fromHeader,
-              to: { name: r.name, email: r.email },
+              to: { name: fullName(r.first_name, r.last_name), email: r.email },
               subject: campaign.subject,
               messageId,
               replyTo: campaign.reply_to_address ?? undefined,
@@ -319,6 +324,7 @@ async function renderRecipientHtml(
   campaign: { id: string; html: string | null; link_mode: number },
   attachments: Awaited<ReturnType<typeof getCampaignAttachments>>,
   subscriberId: number,
+  trackingConsent: boolean,
 ): Promise<string> {
   let html = campaign.html ?? '';
   if (campaign.link_mode) {
@@ -341,7 +347,7 @@ async function renderRecipientHtml(
   // Open/click tracking is optional. When disabled, links are left pointing at
   // their original destinations and no open pixel is added. Link-mode download
   // links above are unaffected — they deliver the attachments themselves.
-  if (env.TRACKING_ENABLED === 'false') return html;
+  if (env.TRACKING_ENABLED === 'false' || !trackingConsent) return html;
   return await instrumentHtml(html, env.TRACKING_BASE_URL, env.LINK_SIGNING_KEY, campaign.id, subscriberId);
 }
 

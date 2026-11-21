@@ -251,7 +251,7 @@ export default {
       buf = [];
     };
     for await (const s of iterateActiveSubscribers(env.DB, newsletterId)) {
-      buf.push({ subscriberId: s.id, email: s.email, name: s.name ?? undefined, token: s.token });
+      buf.push({ subscriberId: s.id, email: s.email, first_name: s.first_name ?? undefined, last_name: s.last_name ?? undefined, token: s.token });
       if (buf.length >= batchSize) await flush();
     }
     await flush();

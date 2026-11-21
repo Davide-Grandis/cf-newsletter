@@ -37,7 +37,7 @@ Open a newsletter's **Mail Merge** tab (before **Footer**) and click **Edit**.
 Enable mail merge, then choose how the personalized greeting is provided:
 
 - **Header is included in the incoming email** (checked by default): write
-  `Hello {{subscriber_name}},` directly in the email you send to the newsletter.
+  `Hello {{first_name}},` directly in the email you send to the newsletter.
   The app substitutes the name in the original HTML and plain-text body,
   preserving its formatting. No separate header is added, including when the
   incoming email has no placeholder. The second switch is greyed out while
@@ -49,13 +49,21 @@ Enable mail merge, then choose how the personalized greeting is provided:
 Save to apply your choice. Switching modes preserves your saved separate
 header templates. The existing footer and unsubscribe link stay unchanged.
 
-The only supported variable is `{{subscriber_name}}` (spaces inside the braces
-are allowed). For example, `Hello {{subscriber_name}},` becomes `Hello Jane,`
-for a subscriber named Jane. Missing names become empty text. In incoming
+Three variables are supported (spaces inside the braces are allowed):
+
+| Variable | Value for Jane Doe | Value for Cher (no last name) |
+| --- | --- | --- |
+| `{{first_name}}` | `Jane` | `Cher` |
+| `{{last_name}}` | `Doe` | *(empty)* |
+| `{{full_name}}` | `Jane Doe` | `Cher` |
+
+The full name is always derived from the first and last name. For example,
+`Hello {{first_name}},` becomes `Hello Jane,`. Missing values become empty
+text. In incoming
 email mode, keep the placeholder as one text token (do not format individual
 characters); it is replaced in visible body text, not links, HTML attributes,
 styles, or scripts. For separate headers, use the preview name field to check
-different names, including an empty one, before saving. Separate header HTML
+different first and last names, including empty ones, before saving. Separate header HTML
 is sanitized and subscriber names are escaped in HTML output in both modes.
 
 Mail merge starts disabled. Disabling it stops personalization but keeps
@@ -81,8 +89,10 @@ Configure it on the newsletter's **Signup** tab:
 
 How it works:
 
-1. A visitor enters their email (and optional name). When Turnstile protection
-   is enabled, they also pass the **Cloudflare Turnstile** bot check.
+1. A visitor enters their email, first name (required) and last name
+   (optional). When tracking is enabled in Settings, the form also shows an
+   unticked **Allow open and click tracking** checkbox. When Turnstile
+   protection is enabled, they also pass the **Cloudflare Turnstile** bot check.
 2. The pipeline records a *pending* subscriber and emails them a confirmation
    link. The response is always the same neutral "check your inbox" message, so
    it can't be used to probe who is subscribed.
@@ -117,28 +127,33 @@ is the column header; recognised column names are matched regardless of order.
 | Field | Notes |
 | --- | --- |
 | **Email** | Required. Rows with an empty email are skipped. |
-| **Name** | Optional display name. |
+| **First name** | Required. Rows without a first name are rejected. |
+| **Last name** | Optional. |
 | **Verified** | Optional; `True`/`False`, `1`/`0`, or `yes`/`no`. Blank defaults to False. |
 | **Date subscribed** | Optional UTC timestamp (`YYYY-MM-DD HH:MM:SS`). Blank or absent defaults to the import time. |
+| **Tracking consent** | Optional; `True`/`False`, `1`/`0`, or `yes`/`no`. Blank defaults to False. Only set it to True when the subscriber opted in to open/click tracking. |
 
 **Duplicates are skipped, not updated.** An email already present in the list
 (case-insensitive), or repeated within the file, is counted as a duplicate. A
-popup reports `Subscribers added: X` and `Duplicated: Y` when the import finishes.
+popup reports `Subscribers added: X`, `Duplicated: Y` and
+`Rejected (missing first name): Z` when the import finishes.
 
 Example file:
 
 ```csv
 # Email: required; unique subscriber email address
-# Name: optional; subscriber display name
+# First name: required; rows without a first name are rejected
+# Last name: optional
 # Verified: optional; True/False, 1/0 or yes/no (defaults to False)
 # Date subscribed: optional; UTC YYYY-MM-DD HH:MM:SS (defaults to import time)
-# Example record (not imported): alice@example.com,Alice,True,2026-05-01 09:00:00
+# Tracking consent: optional; True/False, 1/0 or yes/no (defaults to False). Only set True if the subscriber opted in to open/click tracking
+# Example record (not imported): alice@example.com,Alice,Smith,True,2026-05-01 09:00:00,False
 # Existing email addresses and duplicates in this file are skipped; subscribers are not overwritten
 # Generated at: 2026-10-04T12:00:00.000Z
 # cf-newsletter version: 2.3.0-rc.2
-Email,Name,Verified,Date subscribed
-alice@example.com,Alice,True,2026-05-01 09:00:00
-bob@example.com,,False,
+Email,First name,Last name,Verified,Date subscribed,Tracking consent
+alice@example.com,Alice,Smith,True,2026-05-01 09:00:00,True
+bob@example.com,Bob,,False,,
 ```
 
 **Export** includes additional subscriber columns and honours the current
@@ -203,7 +218,11 @@ controls only the first two transformations and starts off by default. When
 - Links are sent **unmodified** (recipients see and click your real URLs), and
 - the open pixel is **omitted**.
 
-As a result, **opens and clicks are no longer recorded** and the Analytics page
+When **on**, tracking still applies only to subscribers whose **Tracking**
+consent is True (the Subscribers tab shows it). Everyone else receives
+unmodified links and no pixel. Consent is read when each email is sent.
+
+With tracking off, **opens and clicks are no longer recorded** and the Analytics page
 shows none for sends made while tracking is off. Large-attachment **download
 links are unaffected** — they are a delivery mechanism, not tracking, so they
 remain (and a download may still be logged). The toggle takes effect on the next

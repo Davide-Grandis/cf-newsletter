@@ -20,7 +20,10 @@ All state lives in the D1 `subscribers` table (`db/schema.sql`):
 | `id` | Auto-increment primary key. Used in unsubscribe / verify URLs. |
 | `newsletter_id` | Owning newsletter (`ON DELETE CASCADE`). |
 | `email` | Address; unique per newsletter (case stored as given, matched case-insensitively on import/lookup). |
-| `name` | Optional display name. |
+| `first_name` | Required by the app (signup, manual add, CSV import, edit). |
+| `last_name` | Optional. |
+| `full_name` | Virtual generated column: `first_name` + `last_name`. Never written directly. |
+| `tracking_consent` / `tracking_consent_at` | `0/1` opt-in to open/click tracking (default `0`) and when it was given. |
 | `verified` | `0/1`. Confirmed via double opt-in. Defaults to `0`. |
 | `status` | One of `active`, `unsubscribed`, `bounced`, `complained`. Defaults to `active`. |
 | `subscribed_at` | Timestamp of (re)subscription. |
@@ -65,21 +68,23 @@ self-service (public page).
 ### 2.1 Manual add (console)
 
 - **UI:** Newsletter → **Subscribers** tab → add.
-- **API:** `POST /api/newsletters/:id/subscribers` with `{ email, name? }`
-  (`workers/admin/src/index.ts`).
+- **API:** `POST /api/newsletters/:id/subscribers` with
+  `{ email, first_name, last_name?, tracking_consent? }`
+  (`workers/admin/src/index.ts`). `first_name` is required.
 - **SQL:**
 
   ```sql
-  INSERT INTO subscribers (newsletter_id, email, name, token)
-  VALUES (?, ?, ?, ?)
-  ON CONFLICT(newsletter_id, email)
-  DO UPDATE SET status='active', name=COALESCE(excluded.name, subscribers.name)
+  INSERT INTO subscribers (newsletter_id, email, first_name, last_name, tracking_consent, tracking_consent_at, token)
+  VALUES (?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END, ?)
+  ON CONFLICT(newsletter_id, email) DO UPDATE SET status='active',
+    first_name=excluded.first_name, last_name=excluded.last_name,
+    tracking_consent=excluded.tracking_consent, tracking_consent_at=excluded.tracking_consent_at
   ```
 
 - **Result:** `verified` defaults to `0`, `status='active'`, `confirm_token`
   stays `NULL` → **receives mail immediately** (no confirmation). Re-adding an
-  existing address **reactivates** it (sets `status='active'`) and fills in a
-  name if one wasn't set. A fresh unsubscribe `token` is generated.
+  existing address **reactivates** it (sets `status='active'`) and replaces
+  its names and tracking consent. A fresh unsubscribe `token` is generated.
 - Requires edit capability on the newsletter (read-only admins are blocked at
   the mutation choke point).
 
@@ -88,20 +93,22 @@ self-service (public page).
 - **UI:** Subscribers tab → import.
 - **API:** `POST /api/newsletters/:id/subscribers/import` (CSV text or JSON).
 - **Behaviour:**
-  - **Position-based**, header row always skipped.
-  - Columns by order: `email`, `verified` (`True/False/1/0/yes/no`),
-    `subscribed_at` (optional). **Name is not imported.**
+  - Columns are matched by header name (`Email`, `First name`, `Last name`,
+    `Verified`, `Date subscribed`, `Tracking consent`, `Tracking consent date`;
+    `first_name`-style names also work). Without a recognised header, the
+    template order is used.
+  - Rows without a first name are **rejected**.
   - **Duplicates are skipped, not updated** — both against existing rows and
     within the file (case-insensitive on email).
   - **SQL:**
 
     ```sql
-    INSERT INTO subscribers (newsletter_id, email, name, verified, subscribed_at, token)
-    VALUES (?, ?, NULL, ?, COALESCE(NULLIF(?, ''), datetime('now')), ?)
+    INSERT INTO subscribers (newsletter_id, email, first_name, last_name, verified, subscribed_at, tracking_consent, tracking_consent_at, token)
+    VALUES (?, ?, ?, ?, ?, COALESCE(NULLIF(?, ''), datetime('now')), ?, CASE WHEN ? = 1 THEN COALESCE(NULLIF(?, ''), datetime('now')) END, ?)
     ON CONFLICT(newsletter_id, email) DO NOTHING
     ```
 
-  - Returns `{ added, duplicated }`, surfaced in a popup.
+  - Returns `{ added, duplicated, rejected }`, surfaced in a popup.
 - **Result:** imported rows have `confirm_token = NULL` → receive mail
   immediately. `verified` is whatever the file says.
 
@@ -159,15 +166,18 @@ All served by the **tracker worker** (`workers/tracker/src/index.ts`) at
    `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`, returns **503 "Signup
    unavailable"**.
 4. Otherwise renders a branded, mobile-friendly form (`subscribeForm()`): email,
-   optional name, and—when enabled—the Cloudflare Turnstile widget. Light/dark
+   first name (required), last name (optional), an unticked tracking-consent
+   checkbox when `TRACKING_ENABLED` is on, and—when enabled—the Cloudflare
+   Turnstile widget. Light/dark
    via CSS.
 
 **`POST /subscribe/<slug>`**
 
 1. Re-runs the eligibility + configuration checks above.
-2. Parses `email`, `name`, `cf-turnstile-response`.
-3. **Validates email** with a basic regex; invalid → re-render form with error
-   (HTTP 400).
+2. Parses `email`, `first_name`, `last_name`, `tracking_consent`,
+   `cf-turnstile-response`.
+3. **Validates email** with a basic regex and requires a first name; invalid →
+   re-render form with error (HTTP 400).
 4. When Turnstile is enabled, **verifies Turnstile** (`verifyTurnstile()`):
    server-to-server POST to `https://challenges.cloudflare.com/turnstile/v0/siteverify`
    with the secret, token and client IP. Any non-success → re-render form with
@@ -181,11 +191,12 @@ All served by the **tracker worker** (`workers/tracker/src/index.ts`) at
      pending**:
 
      ```sql
-     INSERT INTO subscribers (newsletter_id, email, name, verified, status, token, confirm_token)
-     VALUES (?, ?, ?, 0, 'active', ?, ?)
+     INSERT INTO subscribers (newsletter_id, email, first_name, last_name, tracking_consent, tracking_consent_at, verified, status, token, confirm_token)
+     VALUES (?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END, 0, 'active', ?, ?)
      ON CONFLICT(newsletter_id, email) DO UPDATE SET
        confirm_token = excluded.confirm_token,
-       name = COALESCE(NULLIF(excluded.name, ?), subscribers.name)
+       first_name = excluded.first_name, last_name = excluded.last_name,
+       tracking_consent = excluded.tracking_consent, tracking_consent_at = excluded.tracking_consent_at
      ```
 
      A new `confirm_token` (and, for brand-new rows, a new unsubscribe `token`)

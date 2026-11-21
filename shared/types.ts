@@ -6,7 +6,8 @@ export interface QueueMessage {
 export interface Recipient {
   subscriberId: number;
   email: string;
-  name?: string;
+  first_name?: string;
+  last_name?: string;
   token: string;
 }
 

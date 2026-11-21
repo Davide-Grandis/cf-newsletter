@@ -17,8 +17,9 @@ export interface MailMergeUpdate {
 const inputCls =
   'w-full border border-slate-300 rounded px-2 py-1.5 text-sm bg-white text-slate-900 disabled:opacity-60 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100';
 
-const DEFAULT_HTML = '<p>Hello {{subscriber_name}},</p>';
-const DEFAULT_TEXT = 'Hello {{subscriber_name}},';
+const DEFAULT_HTML = '<p>Hello {{first_name}},</p>';
+const DEFAULT_TEXT = 'Hello {{first_name}},';
+const VARIABLES = ['{{first_name}}', '{{last_name}}', '{{full_name}}'];
 
 export function MailMergeEditor({
   n,
@@ -39,7 +40,9 @@ export function MailMergeEditor({
   const [incoming, setIncoming] = useState(baselineIncoming);
   const [html, setHtml] = useState(baselineHtml);
   const [text, setText] = useState(baselineText);
-  const [sampleName, setSampleName] = useState('Jane Doe');
+  const [sampleFirst, setSampleFirst] = useState('Jane');
+  const [sampleLast, setSampleLast] = useState('Doe');
+  const sample = { first_name: sampleFirst, last_name: sampleLast };
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
@@ -64,8 +67,8 @@ export function MailMergeEditor({
     '<!doctype html><html><head><meta charset="utf-8">' +
     '<style>body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;' +
     'font-size:14px;color:#0f172a;margin:12px;background:#fff}a{color:#2563eb}</style></head>' +
-    `<body>${renderMailMerge(sanitizeMailMergeHtml(html), sampleName, true)}</body></html>`
-  ), [html, sampleName]);
+    `<body>${renderMailMerge(sanitizeMailMergeHtml(html), { first_name: sampleFirst, last_name: sampleLast }, true)}</body></html>`
+  ), [html, sampleFirst, sampleLast]);
 
   async function save() {
     setError(null);
@@ -91,8 +94,13 @@ export function MailMergeEditor({
           <h2 id="mail-merge-label" className="text-sm font-medium text-slate-900 dark:text-slate-100">Enable Mail Merge</h2>
           <p id="mail-merge-help" className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Address each subscriber by name with{' '}
-            <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{subscriber_name}}'}</code>.
-            It&apos;s left blank when no name is known.
+            {VARIABLES.map((v, i) => (
+              <span key={v}>
+                {i > 0 && (i === VARIABLES.length - 1 ? ' or ' : ', ')}
+                <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{v}</code>
+              </span>
+            ))}
+            . The full name combines first and last name; a missing value is left blank.
           </p>
         </div>
         <button
@@ -142,7 +150,7 @@ export function MailMergeEditor({
               <span>
                 <span className="block font-medium text-slate-900 dark:text-slate-100">Header is included in the incoming email</span>
                 <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                  Place <code>{'{{subscriber_name}}'}</code> in the incoming email&apos;s HTML and/or plain-text body. Its formatting is retained.
+                  Place <code>{'{{first_name}}'}</code>, <code>{'{{last_name}}'}</code> or <code>{'{{full_name}}'}</code> in the incoming email&apos;s HTML and/or plain-text body. Its formatting is retained.
                 </span>
               </span>
             </label>
@@ -174,11 +182,20 @@ export function MailMergeEditor({
               <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                 Preview as
                 <input
-                  id="mail-merge-sample-name"
-                  value={sampleName}
-                  onChange={(e) => setSampleName(e.target.value)}
-                  placeholder="Missing name"
-                  className="w-32 border border-slate-300 rounded px-1.5 py-0.5 text-xs bg-white text-slate-900 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+                  id="mail-merge-sample-first-name"
+                  aria-label="Preview first name"
+                  value={sampleFirst}
+                  onChange={(e) => setSampleFirst(e.target.value)}
+                  placeholder="First name"
+                  className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-xs bg-white text-slate-900 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+                />
+                <input
+                  id="mail-merge-sample-last-name"
+                  aria-label="Preview last name"
+                  value={sampleLast}
+                  onChange={(e) => setSampleLast(e.target.value)}
+                  placeholder="Last name"
+                  className="w-24 border border-slate-300 rounded px-1.5 py-0.5 text-xs bg-white text-slate-900 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                 />
               </label>
             </div>
@@ -208,7 +225,7 @@ export function MailMergeEditor({
           <div className="min-w-0">
             <span className="block text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Text preview</span>
             <pre className="mt-0.5 w-full h-[90px] overflow-auto border border-slate-200 rounded bg-slate-50 p-2 text-xs whitespace-pre-wrap font-mono text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-200">
-              {renderMailMerge(text, sampleName, false)}
+              {renderMailMerge(text, sample, false)}
             </pre>
           </div>
         </div>

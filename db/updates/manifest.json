@@ -34,5 +34,11 @@
     "file": "0006_update_intents.sql",
     "description": "Record single-use console update requests completed through Cloudflare OAuth",
     "checkSql": "SELECT COUNT(*) AS present FROM sqlite_master WHERE type='table' AND name='update_intents'"
+  },
+  {
+    "id": "0007_subscriber_names_tracking_consent",
+    "file": "0007_subscriber_names_tracking_consent.sql",
+    "description": "Store subscriber first and last names, derive the full name, and record tracking consent",
+    "checkSql": "SELECT CASE WHEN (SELECT COUNT(*) FROM pragma_table_xinfo('subscribers') WHERE name IN ('first_name', 'last_name', 'full_name', 'tracking_consent', 'tracking_consent_at')) = 5 THEN 1 ELSE 0 END AS present"
   }
 ]

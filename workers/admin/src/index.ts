@@ -89,7 +89,9 @@ async function brandingLogoUrl(bucket: R2Bucket): Promise<string | null> {
 }
 
 interface SubscriberPatch {
-  name?: string | null;
+  first_name?: string;
+  last_name?: string | null;
+  tracking_consent?: boolean;
   status?: 'active' | 'unsubscribed' | 'bounced' | 'complained';
 }
 
@@ -1722,7 +1724,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         const q = url.searchParams.get('q');
         const offset = Math.max(0, Number(url.searchParams.get('cursor') ?? '0') || 0);
         const limit = clamp(Number(url.searchParams.get('limit') ?? '50'), 1, 200);
-        const VALID_SORT_COLS = new Set(['email', 'name', 'status', 'verified', 'bounce_count', 'subscribed_at', 'id']);
+        const VALID_SORT_COLS = new Set(['email', 'full_name', 'first_name', 'last_name', 'tracking_consent', 'status', 'verified', 'bounce_count', 'subscribed_at', 'id']);
         const sortColRaw = url.searchParams.get('sort_key') ?? 'email';
         const sortCol = VALID_SORT_COLS.has(sortColRaw) ? sortColRaw : 'email';
         const sortDir = url.searchParams.get('sort_dir') === 'desc' ? 'DESC' : 'ASC';
@@ -1744,15 +1746,15 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           binds.push(bouncesParam);
         }
         if (q) {
-          where.push('(email LIKE ? OR name LIKE ?)');
+          where.push('(email LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR full_name LIKE ?)');
           const like = `%${q.replace(/[%_]/g, (c) => '\\' + c)}%`;
-          binds.push(like, like);
+          binds.push(like, like, like, like);
         }
         const whereSql = `WHERE ${where.join(' AND ')}`;
         const [page, count] = await Promise.all([
           env.DB
             .prepare(
-              `SELECT id, email, name, verified, status, bounce_count, ` +
+              `SELECT id, email, first_name, last_name, full_name, tracking_consent, tracking_consent_at, verified, status, bounce_count, ` +
                 `hard_bounce_count, soft_bounce_count, last_bounce_type, last_bounce_code, last_bounce_at, ` +
                 `subscribed_at FROM subscribers ` +
                 `${whereSql} ORDER BY ${sortCol} ${sortDir} LIMIT ? OFFSET ?`,
@@ -1773,15 +1775,21 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         });
       }
       if (m === 'POST') {
-        const { email, name } = await req.json<{ email: string; name?: string }>();
-        if (!email) return Response.json({ error: 'email required' }, { status: 400 });
+        const body = await req.json<{ email: string; first_name?: string; last_name?: string | null; tracking_consent?: boolean }>();
+        if (!body.email) return Response.json({ error: 'email required' }, { status: 400 });
+        const firstName = cleanName(body.first_name);
+        if (!firstName) return Response.json({ error: 'first_name required' }, { status: 400 });
+        const consent = body.tracking_consent === true ? 1 : 0;
         const token = crypto.randomUUID();
         await env.DB
           .prepare(
-            "INSERT INTO subscribers (newsletter_id, email, name, token) VALUES (?, ?, ?, ?) " +
-              "ON CONFLICT(newsletter_id, email) DO UPDATE SET status='active', name=COALESCE(excluded.name, subscribers.name)",
+            "INSERT INTO subscribers (newsletter_id, email, first_name, last_name, tracking_consent, tracking_consent_at, token) " +
+              "VALUES (?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END, ?) " +
+              "ON CONFLICT(newsletter_id, email) DO UPDATE SET status='active', " +
+              'first_name=excluded.first_name, last_name=excluded.last_name, ' +
+              'tracking_consent=excluded.tracking_consent, tracking_consent_at=excluded.tracking_consent_at',
           )
-          .bind(nid, email, (typeof name === 'string' && sanitizeDisplayName(name)) || null, token)
+          .bind(nid, body.email, firstName, cleanName(body.last_name), consent, consent, token)
           .run();
         return Response.json({ ok: true });
       }
@@ -1808,33 +1816,36 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         binds.push(bouncesParam);
       }
       if (q) {
-        where.push('(email LIKE ? OR name LIKE ?)');
+        where.push('(email LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR full_name LIKE ?)');
         const like = `%${q.replace(/[%_]/g, (c) => '\\' + c)}%`;
-        binds.push(like, like);
+        binds.push(like, like, like, like);
       }
       const [{ results }, nlRow] = await Promise.all([
         env.DB
           .prepare(
-            `SELECT email, name, verified, status, bounce_count, last_bounce_type, last_bounce_code, subscribed_at FROM subscribers ` +
+            `SELECT email, first_name, last_name, verified, status, bounce_count, last_bounce_type, last_bounce_code, subscribed_at, tracking_consent, tracking_consent_at FROM subscribers ` +
               `WHERE ${where.join(' AND ')} ORDER BY email ASC`,
           )
           .bind(...binds)
-          .all<{ email: string; name: string | null; verified: number; status: string; bounce_count: number; last_bounce_type: string | null; last_bounce_code: string | null; subscribed_at: string }>(),
+          .all<{ email: string; first_name: string | null; last_name: string | null; verified: number; status: string; bounce_count: number; last_bounce_type: string | null; last_bounce_code: string | null; subscribed_at: string; tracking_consent: number; tracking_consent_at: string | null }>(),
         env.DB.prepare('SELECT name FROM newsletters WHERE id = ?').bind(nid).first<{ name: string }>(),
       ]);
       const nlName = nlRow?.name ?? '';
-      const header = 'Newsletter,Email,Name,Verified,Status,Bounces,Last bounce type,Last bounce code,Date subscribed';
+      const header = 'Newsletter,Email,First name,Last name,Verified,Status,Bounces,Last bounce type,Last bounce code,Date subscribed,Tracking consent,Tracking consent date';
       const lines = (results ?? []).map((r) =>
         [
           nlName,
           r.email,
-          r.name ?? '',
+          r.first_name ?? '',
+          r.last_name ?? '',
           r.verified ? 'True' : 'False',
           r.status,
           String(r.bounce_count ?? 0),
           r.last_bounce_type ?? '',
           r.last_bounce_code ?? '',
           fmtDate(r.subscribed_at),
+          r.tracking_consent ? 'True' : 'False',
+          fmtDate(r.tracking_consent_at),
         ]
           .map(csvCell)
           .join(','),
@@ -1853,11 +1864,13 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       const text = ct.includes('application/json')
         ? (await req.json<{ csv: string }>()).csv
         : await req.text();
-      // Column detection: read the header row to locate Email, Verified and
-      // Date subscribed by name (case-insensitive). This handles both the full
-      // export format (Newsletter, Email, Name, Verified, …) and any simple
-      // 3-column CSV (email, verified, date). Falls back to positional indices
-      // 0 / 1 / 2 when a header is not recognised.
+      // Column detection: read the header row to locate each column by name
+      // (case-insensitive; "first name" and "first_name" are equivalent). This
+      // handles both the full export format (Newsletter, Email, First name, …)
+      // and the import template. Falls back to the template's positions
+      // (Email, First name, Last name, Verified, Date subscribed, Tracking
+      // consent) when a header is not recognised. Rows without a first name
+      // are rejected.
       // Duplicates (by email, case-insensitive) are skipped, not updated —
       // both against existing rows and within the file itself.
       const existing = await env.DB
@@ -1866,14 +1879,19 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         .all<{ email: string }>();
       const seen = new Set((existing.results ?? []).map((r) => r.email.toLowerCase()));
       const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0 && !l.trimStart().startsWith('#'));
-      const headerCols = splitCsvLine(lines[0] ?? '').map((c) => c.trim().toLowerCase());
-      const fi = (name: string, fallback: number) => { const i = headerCols.indexOf(name); return i >= 0 ? i : fallback; };
-      const eIdx = fi('email', 0);
-      const nIdx = headerCols.indexOf('name');
-      const vIdx = fi('verified', 1);
-      const dIdx = headerCols.includes('email') ? headerCols.indexOf('date subscribed') : 2;
+      const headerCols = splitCsvLine(lines[0] ?? '').map((c) => c.trim().toLowerCase().replace(/_/g, ' '));
+      const known = headerCols.includes('email');
+      const fi = (name: string, fallback: number) => known ? headerCols.indexOf(name) : fallback;
+      const eIdx = known ? headerCols.indexOf('email') : 0;
+      const fnIdx = fi('first name', 1);
+      const lnIdx = fi('last name', 2);
+      const vIdx = fi('verified', 3);
+      const dIdx = fi('date subscribed', 4);
+      const tcIdx = fi('tracking consent', 5);
+      const tdIdx = fi('tracking consent date', -1);
       let added = 0;
       let duplicated = 0;
+      let rejected = 0;
       for (const line of lines.slice(1)) {
         const cols = splitCsvLine(line);
         const email = (cols[eIdx] ?? '').trim();
@@ -1883,31 +1901,37 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           duplicated++;
           continue;
         }
+        const firstName = cleanName(cols[fnIdx]);
+        if (!firstName) {
+          rejected++;
+          continue;
+        }
         seen.add(key);
-        const name = nIdx >= 0 ? (sanitizeDisplayName(cols[nIdx] ?? '') || null) : null;
         const verified = parseBool(cols[vIdx]) ? 1 : 0;
         const subscribedAt = fmtDate((cols[dIdx] ?? '').trim());
+        const consent = parseBool(cols[tcIdx]) ? 1 : 0;
+        const consentAt = consent ? fmtDate((cols[tdIdx] ?? '').trim()) : '';
         const token = crypto.randomUUID();
         await env.DB
           .prepare(
-            "INSERT INTO subscribers (newsletter_id, email, name, verified, subscribed_at, token) " +
-              "VALUES (?, ?, ?, ?, COALESCE(NULLIF(?, ''), datetime('now')), ?) " +
+            "INSERT INTO subscribers (newsletter_id, email, first_name, last_name, verified, subscribed_at, tracking_consent, tracking_consent_at, token) " +
+              "VALUES (?, ?, ?, ?, ?, COALESCE(NULLIF(?, ''), datetime('now')), ?, CASE WHEN ? = 1 THEN COALESCE(NULLIF(?, ''), datetime('now')) END, ?) " +
               "ON CONFLICT(newsletter_id, email) DO NOTHING",
           )
-          .bind(nid, email, name, verified, subscribedAt, token)
+          .bind(nid, email, firstName, cleanName(cols[lnIdx]), verified, subscribedAt, consent, consent, consentAt, token)
           .run();
         added++;
       }
-      return Response.json({ ok: true, added, duplicated });
+      return Response.json({ ok: true, added, duplicated, rejected });
     }
     // Resend confirmation (verify) email to an unverified subscriber.
     const rcm = /^\/subscribers\/(\d+)\/resend-confirmation$/.exec(rest);
     if (rcm && m === 'POST') {
       const sid = Number(rcm[1]);
       const sub = await env.DB
-        .prepare('SELECT id, email, name, verified FROM subscribers WHERE id = ? AND newsletter_id = ?')
+        .prepare('SELECT id, email, full_name, verified FROM subscribers WHERE id = ? AND newsletter_id = ?')
         .bind(sid, nid)
-        .first<{ id: number; email: string; name: string | null; verified: number }>();
+        .first<{ id: number; email: string; full_name: string | null; verified: number }>();
       if (!sub) return Response.json({ error: 'not found' }, { status: 404 });
       if (sub.verified === 1) return Response.json({ error: 'already verified' }, { status: 409 });
       const confirmToken = crypto.randomUUID();
@@ -1948,7 +1972,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           `Confirm your subscription to ${nl.name}\n\n` +
           `Please confirm you want to receive ${nl.name} at this address by opening:\n${verifyUrl}\n\n` +
           `If you didn't request this, ignore this email — no subscription is created until you confirm.`;
-        const raw = buildEmail({ from: fromHeader, to: { name: sub.name, email: sub.email }, subject, messageId, text, html, attachments: [], headers: { 'X-Entity-Ref-ID': messageId } });
+        const raw = buildEmail({ from: fromHeader, to: { name: sub.full_name, email: sub.email }, subject, messageId, text, html, attachments: [], headers: { 'X-Entity-Ref-ID': messageId } });
         await env.SEND_EMAIL.send(new EmailMessage(fromAddr, sub.email, raw));
       }
       return Response.json({ ok: true });
@@ -1968,9 +1992,24 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         const body = await req.json<SubscriberPatch>();
         const sets: string[] = [];
         const binds: unknown[] = [];
-        if ('name' in body) {
-          sets.push('name = ?');
-          binds.push((typeof body.name === 'string' && sanitizeDisplayName(body.name)) || null);
+        if ('first_name' in body) {
+          const firstName = cleanName(body.first_name);
+          if (!firstName) return Response.json({ error: 'first_name cannot be empty' }, { status: 400 });
+          sets.push('first_name = ?');
+          binds.push(firstName);
+        }
+        if ('last_name' in body) {
+          sets.push('last_name = ?');
+          binds.push(cleanName(body.last_name));
+        }
+        if ('tracking_consent' in body) {
+          if (typeof body.tracking_consent !== 'boolean') {
+            return Response.json({ error: 'tracking_consent must be a boolean' }, { status: 400 });
+          }
+          sets.push('tracking_consent = ?', body.tracking_consent
+            ? "tracking_consent_at = CASE WHEN tracking_consent = 1 THEN tracking_consent_at ELSE datetime('now') END"
+            : 'tracking_consent_at = NULL');
+          binds.push(body.tracking_consent ? 1 : 0);
         }
         if (body.status) {
           sets.push('status = ?');
@@ -3170,6 +3209,10 @@ function splitCsvLine(line: string): string[] {
 }
 
 // Parse a loose boolean ("true"/"1"/"yes"/"y" => true, everything else false).
+function cleanName(value: unknown): string | null {
+  return typeof value === 'string' ? sanitizeDisplayName(value).slice(0, 100) || null : null;
+}
+
 function parseBool(value: string | undefined): boolean {
   return /^(true|1|yes|y)$/i.test((value ?? '').trim());
 }

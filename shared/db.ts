@@ -67,16 +67,16 @@ export async function* iterateActiveSubscribers(
   db: D1Database,
   newsletterId: string,
   pageSize = 1000,
-): AsyncGenerator<{ id: number; email: string; name: string | null; token: string }> {
+): AsyncGenerator<{ id: number; email: string; first_name: string | null; last_name: string | null; token: string }> {
   let lastId = 0;
   while (true) {
     const { results } = await db
       .prepare(
-        "SELECT id, email, name, token FROM subscribers " +
+        "SELECT id, email, first_name, last_name, token FROM subscribers " +
           "WHERE newsletter_id = ? AND status='active' AND confirm_token IS NULL AND id > ? ORDER BY id ASC LIMIT ?",
       )
       .bind(newsletterId, lastId, pageSize)
-      .all<{ id: number; email: string; name: string | null; token: string }>();
+      .all<{ id: number; email: string; first_name: string | null; last_name: string | null; token: string }>();
     if (!results || results.length === 0) return;
     for (const row of results) {
       yield row;
@@ -84,6 +84,21 @@ export async function* iterateActiveSubscribers(
     }
     if (results.length < pageSize) return;
   }
+}
+
+/**
+ * Return the ids, among `subscriberIds`, that have consented to open/click
+ * tracking. Read at send time (not enqueue time) so a consent withdrawn while
+ * a campaign is queued is honoured. Ids are passed as one JSON parameter to
+ * stay clear of D1's bound-parameter limit.
+ */
+export async function getTrackingConsents(db: D1Database, subscriberIds: number[]): Promise<Set<number>> {
+  if (subscriberIds.length === 0) return new Set();
+  const { results } = await db
+    .prepare('SELECT id FROM subscribers WHERE tracking_consent = 1 AND id IN (SELECT value FROM json_each(?))')
+    .bind(JSON.stringify(subscriberIds))
+    .all<{ id: number }>();
+  return new Set((results ?? []).map((r) => r.id));
 }
 
 /**

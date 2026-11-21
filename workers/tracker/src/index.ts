@@ -3,6 +3,7 @@ import { verifyHmac } from '../../../shared/tracking';
 import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
 import { loadSettings, resolveTrackingBaseUrl } from '../../../shared/settings';
 import { writeLog } from '../../../shared/db';
+import { fullName } from '../../../shared/mail-merge';
 
 export interface Env {
   DB: D1Database;
@@ -20,6 +21,7 @@ export interface Env {
   TRACKING_BASE_URL?: string;
   TURNSTILE_ENABLED?: string;
   TURNSTILE_SITE_KEY?: string;
+  TRACKING_ENABLED?: string;
 }
 
 const TRANSPARENT_GIF = new Uint8Array([
@@ -212,24 +214,31 @@ async function handleSubscribe(
   }
 
   const effectiveSiteKey = turnstileEnabled ? siteKey : '';
+  const askConsent = (cfg.TRACKING_ENABLED ?? 'false') !== 'false';
+  const form = (error: string | null) => subscribeForm(slug, nl.name, effectiveSiteKey, askConsent, error);
 
   if (req.method === 'GET') {
-    return htmlResponse(subscribeForm(slug, nl.name, effectiveSiteKey, null));
+    return htmlResponse(form(null));
   }
 
   if (req.method === 'POST') {
-    const form = await req.formData().catch(() => null);
-    const email = String(form?.get('email') ?? '').trim().toLowerCase();
-    const name = sanitizeDisplayName(String(form?.get('name') ?? '')).slice(0, 200);
-    const tsToken = String(form?.get('cf-turnstile-response') ?? '');
+    const data = await req.formData().catch(() => null);
+    const email = String(data?.get('email') ?? '').trim().toLowerCase();
+    const firstName = sanitizeDisplayName(String(data?.get('first_name') ?? '')).slice(0, 100);
+    const lastName = sanitizeDisplayName(String(data?.get('last_name') ?? '')).slice(0, 100);
+    const consent = askConsent && data?.get('tracking_consent') === '1' ? 1 : 0;
+    const tsToken = String(data?.get('cf-turnstile-response') ?? '');
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return htmlResponse(subscribeForm(slug, nl.name, effectiveSiteKey, 'Please enter a valid email address.'), 400);
+      return htmlResponse(form('Please enter a valid email address.'), 400);
+    }
+    if (!firstName) {
+      return htmlResponse(form('Please enter your first name.'), 400);
     }
     if (turnstileEnabled) {
       const human = await verifyTurnstile(env.TURNSTILE_SECRET_KEY!, tsToken, req.headers.get('cf-connecting-ip'));
       if (!human) {
-        return htmlResponse(subscribeForm(slug, nl.name, effectiveSiteKey, 'Verification failed. Please try again.'), 400);
+        return htmlResponse(form('Verification failed. Please try again.'), 400);
       }
     }
 
@@ -253,15 +262,16 @@ async function handleSubscribe(
     const unsubToken = crypto.randomUUID();
     const res = await env.DB
       .prepare(
-        'INSERT INTO subscribers (newsletter_id, email, name, verified, status, token, confirm_token) ' +
-          "VALUES (?, ?, ?, 0, 'active', ?, ?) " +
+        'INSERT INTO subscribers (newsletter_id, email, first_name, last_name, tracking_consent, tracking_consent_at, verified, status, token, confirm_token) ' +
+          "VALUES (?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END, 0, 'active', ?, ?) " +
           'ON CONFLICT(newsletter_id, email) DO UPDATE SET ' +
           'confirm_token = excluded.confirm_token, ' +
-          'name = COALESCE(NULLIF(excluded.name, ?), subscribers.name), ' +
+          'first_name = excluded.first_name, last_name = excluded.last_name, ' +
+          'tracking_consent = excluded.tracking_consent, tracking_consent_at = excluded.tracking_consent_at, ' +
           "status = CASE WHEN subscribers.status = 'unsubscribed' THEN 'active' ELSE subscribers.status END, " +
           "verified = CASE WHEN subscribers.status = 'unsubscribed' THEN 0 ELSE subscribers.verified END",
       )
-      .bind(nl.id, email, name || null, unsubToken, confirmToken, '')
+      .bind(nl.id, email, firstName, lastName || null, consent, consent, unsubToken, confirmToken)
       .run();
     void res;
     const row = await env.DB
@@ -273,13 +283,13 @@ async function handleSubscribe(
       event: 'subscriber.signup',
       newsletterId: nl.id,
       message: `Signup pending confirmation for ${email}`,
-      detail: { email, name: name || null },
+      detail: { email, first_name: firstName, last_name: lastName || null, tracking_consent: consent },
     }));
     if (row) {
       const base = (cfg.TRACKING_BASE_URL ?? '').replace(/\/+$/, '');
       const verifyUrl = `${base}/verify/${row.id}?t=${encodeURIComponent(confirmToken)}`;
       ctx.waitUntil(
-        sendConfirmationEmail(env, cfg, nl, email, name, verifyUrl)
+        sendConfirmationEmail(env, cfg, nl, email, fullName(firstName, lastName), verifyUrl)
           .then(() => writeLog(env.DB, {
             source: 'tracker',
             event: 'subscriber.confirmation_sent',
@@ -429,7 +439,7 @@ function pageShell(title: string, bodyHtml: string): string {
     `<body><main class="card"><h1>${escapeHtml(title)}</h1>${bodyHtml}</main></body></html>`;
 }
 
-function subscribeForm(slug: string, newsletterName: string, siteKey: string, error: string | null): string {
+function subscribeForm(slug: string, newsletterName: string, siteKey: string, askConsent: boolean, error: string | null): string {
   const name = escapeHtml(newsletterName);
   const err = error ? `<p class="err">${escapeHtml(error)}</p>` : '';
   const tsScript = siteKey
@@ -445,7 +455,13 @@ function subscribeForm(slug: string, newsletterName: string, siteKey: string, er
     `<p class="muted">Enter your details and we'll send a confirmation link.</p>${err}` +
     `<form method="post" action="/subscribe/${encodeURIComponent(slug)}">` +
     `<label>Email<input type="email" name="email" required autocomplete="email" placeholder="you@example.com"></label>` +
-    `<label>Name <span class="opt">(optional)</span><input type="text" name="name" autocomplete="name"></label>` +
+    `<label>First name<input type="text" name="first_name" required maxlength="100" autocomplete="given-name"></label>` +
+    `<label>Last name <span class="opt">(optional)</span><input type="text" name="last_name" maxlength="100" autocomplete="family-name"></label>` +
+    (askConsent
+      ? `<label class="check"><input type="checkbox" name="tracking_consent" value="1">` +
+        `<span>Allow open and click tracking <span class="opt">(optional)</span>` +
+        `<span class="hint">We record when you open our emails and which links you click, to improve the newsletter.</span></span></label>`
+      : '') +
     `${tsWidget}` +
     `<button type="submit">Subscribe</button>` +
     `</form></main></body></html>`;
@@ -467,6 +483,9 @@ const PAGE_CSS =
   'font-size:14px;font-weight:400}' +
   'button{width:100%;margin-top:20px;padding:13px;border:0;border-radius:6px;background:#0f172a;color:#fff;' +
   'font-size:14px;font-weight:600;cursor:pointer}' +
+  '.check{display:flex;gap:10px;align-items:flex-start;font-weight:600}' +
+  '.check input{width:auto;margin:2px 0 0;flex:none}' +
+  '.hint{display:block;color:#64748b;font-weight:400;margin-top:4px}' +
   '.cf-turnstile{margin:8px 0 4px}' +
   'button.danger{background:#dc2626}button.danger:hover{background:#b91c1c}' +
   '.err{color:#dc2626;font-size:13px;margin:0 0 16px}' +
