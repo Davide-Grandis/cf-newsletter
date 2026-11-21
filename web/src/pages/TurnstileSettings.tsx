@@ -11,23 +11,17 @@ interface Status {
   checkError: string | null;
 }
 
-const inputClass = 'mt-1 block w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
-
 export default function TurnstileSettings() {
   const qc = useQueryClient();
   const status = useQuery({ queryKey: ['turnstile-status'], queryFn: () => api<Status>('/api/settings/turnstile') });
-  const [siteKey, setSiteKey] = useState('');
-  const [configuring, setConfiguring] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const validKey = /^[A-Za-z0-9_-]{20,32}$/.test(siteKey.trim());
   const configuredHostname = Boolean(status.data?.hostname && status.data.hostname !== 'track.yourdomain.com');
 
   async function change(enabled: boolean) {
-    if (saving || (enabled && (!validKey || !configuredHostname))) return;
-    const key = enabled ? siteKey.trim() : status.data?.siteKey ?? '';
+    if (saving || (enabled && !configuredHostname)) return;
     setSaving(true);
     setConfirmDelete(false);
     setError(null);
@@ -35,14 +29,10 @@ export default function TurnstileSettings() {
     try {
       await api('/api/settings/turnstile', {
         method: 'PUT',
-        body: JSON.stringify({ enabled, siteKey: key, confirmDelete: !enabled }),
+        body: JSON.stringify(enabled
+          ? { enabled: true }
+          : { enabled: false, siteKey: status.data?.siteKey ?? '', confirmDelete: true }),
       });
-      // Only reflect enabled protection after the server verifies and saves it.
-      qc.setQueryData<Status>(['turnstile-status'], (current) => current && {
-        ...current, enabled, ready: enabled, siteKey: enabled ? key : '', checkError: null,
-      });
-      setSiteKey('');
-      setConfiguring(false);
       setMessage(enabled
         ? 'Turnstile enabled. The widget and tracker configuration have been verified.'
         : 'Turnstile disabled. The Cloudflare widget and tracker keys have been removed.');
@@ -58,12 +48,6 @@ export default function TurnstileSettings() {
   if (status.error) return <p role="alert" className="text-sm text-red-600">{status.error.message}</p>;
   const data = status.data!;
   const enabled = data.enabled && data.ready && !data.checkError;
-
-  function cancelSetup() {
-    setConfiguring(false);
-    setSiteKey('');
-    setError(null);
-  }
 
   return (
     <section className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
@@ -87,71 +71,31 @@ export default function TurnstileSettings() {
             aria-labelledby="turnstile-label"
             aria-describedby="turnstile-status"
             aria-checked={enabled}
-            aria-expanded={configuring}
-            disabled={saving}
+            aria-busy={saving}
+            disabled={saving || (!enabled && !configuredHostname)}
             onClick={() => {
               setError(null);
               setMessage(null);
               if (enabled) setConfirmDelete(true);
-              else if (configuring) cancelSetup();
-              else setConfiguring(true);
+              else void change(true);
             }}
-            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 disabled:opacity-50 ${enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 disabled:opacity-50 ${enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
           </button>
         </div>
-        {data.enabled && !enabled && !data.checkError && (
+        {!saving && data.enabled && !enabled && !data.checkError && (
           <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">
             The tracker keys could not be verified. Protected signup may be unavailable until Turnstile is successfully configured again.
           </p>
         )}
-        {data.checkError && <p className="text-xs text-amber-700 dark:text-amber-400">{data.checkError}</p>}
-        {configuring && !enabled && (
-          <form
-            className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40"
-            onSubmit={(event) => { event.preventDefault(); void change(true); }}
-          >
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              {data.siteKey ? 'Use the previously configured widget in ' : 'Create a managed widget in '}
-              <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noreferrer" className="text-blue-600 underline dark:text-blue-400">Cloudflare Turnstile</a>,
-              allow exactly {configuredHostname ? <code className="break-all font-semibold">{data.hostname}</code> : 'your tracking hostname (configure it in Tracking & bounce first)'}.
-              Use only the hostname, without a scheme, port, or path, not the console or embedding website hostname.
-            </p>
-            <p id="turnstile-key-help" className="text-xs text-slate-500 dark:text-slate-400">
-              Enter the widget&apos;s public site key. The app validates it, retrieves the matching secret securely, and saves both keys on the tracker before enabling protection. The input is hidden after saving.
-            </p>
-            <label className="block text-sm font-medium">
-              Turnstile site key
-              <input
-                value={siteKey}
-                onChange={(event) => { setSiteKey(event.target.value); setError(null); }}
-                disabled={saving}
-                autoFocus
-                required
-                aria-describedby="turnstile-key-help"
-                aria-invalid={Boolean(siteKey && !validKey)}
-                spellCheck={false}
-                autoComplete="off"
-                maxLength={32}
-                placeholder="Public site key from your Cloudflare widget"
-                className={inputClass}
-              />
-            </label>
-            {siteKey && !validKey && <p className="text-xs text-red-600">Enter a valid Turnstile site key before enabling protection.</p>}
-            <div className="flex flex-wrap gap-2">
-              <button type="submit" disabled={saving || !validKey || !configuredHostname}
-                className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900">
-                {saving ? 'Validating and saving...' : 'Validate and enable'}
-              </button>
-              <button type="button" disabled={saving} onClick={cancelSetup}
-                className="rounded border border-slate-300 px-3 py-2 text-sm disabled:opacity-40 dark:border-slate-600">
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-        {saving && <p role="status" className="text-sm text-slate-500">Waiting for Cloudflare to verify the configuration...</p>}
+        {!saving && data.checkError && <p className="text-xs text-amber-700 dark:text-amber-400">{data.checkError}</p>}
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {configuredHostname
+            ? <>Enabling automatically creates or reuses the app&apos;s Turnstile widget for <code className="break-all">{data.hostname}</code> and securely configures its keys.</>
+            : 'Configure the tracking hostname in Tracking & bounce before enabling Turnstile.'}
+        </p>
+        {saving && <p role="status" className="text-sm text-slate-500">Saving and verifying Turnstile configuration with Cloudflare...</p>}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         {message && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">{message}</p>}
       </div>

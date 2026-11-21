@@ -499,7 +499,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     }
     try {
       const body = JSON.parse(new TextDecoder().decode(await boundedBytes(new Response(req.body), 2048))) as {
-        enabled: boolean; siteKey: string; confirmDelete?: boolean;
+        enabled: boolean; siteKey?: string; confirmDelete?: boolean;
       };
       if (!runtimeToken) throw new TurnstileError('The stored runtime API token is missing. Configure CF_API_TOKEN on the admin Worker with Account: Turnstile Edit and Workers Scripts Edit.', 503);
       if (body.enabled && (!hostname || hostname === 'track.yourdomain.com')) throw new TurnstileError('Configure the tracking hostname before enabling Turnstile.');

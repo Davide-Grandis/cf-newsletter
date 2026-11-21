@@ -68,10 +68,12 @@ function validateWidget(widget: TurnstileWidget | null, siteKey: string, hostnam
   return widget;
 }
 
-export async function createTurnstileWidget(token: string, account: string, hostname: string): Promise<TurnstileWidget> {
+export async function createTurnstileWidget(
+  token: string, account: string, hostname: string, name = `cf-newsletter signup (${hostname})`,
+): Promise<TurnstileWidget> {
   const widget = await cf<TurnstileWidget>(token, `${accountPath(account)}/challenges/widgets`, {
     method: 'POST',
-    body: JSON.stringify({ name: `cf-newsletter signup (${hostname})`, domains: [hostname], mode: 'managed', clearance_level: 'no_clearance' }),
+    body: JSON.stringify({ name, domains: [hostname], mode: 'managed', clearance_level: 'no_clearance' }),
   });
   return validateWidget(widget, widget?.sitekey ?? '', hostname);
 }
@@ -152,27 +154,72 @@ export interface TurnstileChange {
   hostname: string;
   token: string;
   enabled: boolean;
-  siteKey: string;
+  siteKey?: string;
   confirmDelete?: boolean;
 }
 
+async function automaticWidget(query: Query, input: TurnstileChange, savedKey: string): Promise<TurnstileWidget> {
+  const path = `${accountPath(input.account)}/challenges/widgets`;
+  if (validTurnstileSiteKey(savedKey)) {
+    const existing = await cf<TurnstileWidget>(input.token, `${path}/${savedKey}`, {}, true);
+    if (existing) return validateWidget(existing, savedKey, input.hostname);
+  }
+
+  // Persist a unique creation name before the API call so retries can recover
+  // the same widget even when its creation response or the next D1 write is lost.
+  const pending = (await query("SELECT value FROM deployment_metadata WHERE key='turnstile_widget_creation'"))[0]?.value;
+  const creation = pending ? JSON.parse(String(pending)) as { account: string; hostname: string; name: string } : {
+    account: input.account, hostname: input.hostname,
+    name: `cf-newsletter signup (${input.hostname.slice(0, 160)}) ${crypto.randomUUID()}`,
+  };
+  if (creation.account !== input.account || creation.hostname !== input.hostname || typeof creation.name !== 'string') {
+    throw new TurnstileError('A widget setup is pending for a different account or hostname. Restore that configuration before retrying.');
+  }
+  if (!pending) {
+    await query("INSERT INTO deployment_metadata(key,value) VALUES('turnstile_widget_creation',?)", [JSON.stringify(creation)]);
+  }
+  const widgets = await cf<Array<{ sitekey: string; name: string }>>(
+    input.token, `${path}?filter=${encodeURIComponent(`name:${creation.name}`)}&per_page=5`,
+  );
+  if (!Array.isArray(widgets) || widgets.length >= 5) throw new TurnstileError('Could not safely identify the app-created Turnstile widget. Retry after checking the Cloudflare dashboard.');
+  const matches = widgets.filter((widget) => widget.name === creation.name);
+  if (matches.length > 1) throw new TurnstileError('Multiple matching Turnstile widgets were found. Resolve the duplicate widgets in Cloudflare before retrying.');
+  const match = matches[0];
+  if (match && !validTurnstileSiteKey(match.sitekey)) throw new TurnstileError('Cloudflare returned an invalid Turnstile widget.');
+  const widget = match
+    ? validateWidget(await cf<TurnstileWidget>(input.token, `${path}/${match.sitekey}`), match.sitekey, input.hostname)
+    : await createTurnstileWidget(input.token, input.account, input.hostname, creation.name);
+  // Save only the public key for retries. Protection stays off until the
+  // matching secret has been installed and verified on the tracker.
+  await query("INSERT INTO settings(key,value) VALUES('TURNSTILE_SITE_KEY',?),('TURNSTILE_ENABLED','false') ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')", [widget.sitekey]);
+  return widget;
+}
+
 export async function changeTurnstile(query: Query, input: TurnstileChange): Promise<void> {
-  if (typeof input.enabled !== 'boolean' || typeof input.siteKey !== 'string') throw new TurnstileError('Invalid Turnstile configuration.');
+  if (typeof input.enabled !== 'boolean' || (input.siteKey !== undefined && typeof input.siteKey !== 'string')) throw new TurnstileError('Invalid Turnstile configuration.');
   accountPath(input.account);
   if (typeof input.token !== 'string' || !/^[A-Za-z0-9._-]{20,512}$/.test(input.token)) {
     throw new TurnstileError('A valid configured Cloudflare API token with Turnstile Edit and Workers Scripts Edit is required.');
   }
-  const siteKey = input.siteKey.trim();
-  if (input.enabled && !validTurnstileSiteKey(siteKey)) throw new TurnstileError('Enter a valid Turnstile site key before enabling protection.');
+  const automatic = input.enabled && input.siteKey === undefined;
+  const siteKey = input.siteKey?.trim() ?? '';
+  if (input.enabled && (!input.hostname || input.hostname === 'track.yourdomain.com')) throw new TurnstileError('Configure the tracking hostname before enabling Turnstile.');
+  if (input.enabled && !automatic && !validTurnstileSiteKey(siteKey)) throw new TurnstileError('Enter a valid Turnstile site key before enabling protection.');
   await withConfigurationLock(query, async () => {
     const current = await readTurnstileConfig(query);
     if (input.enabled) {
-      if (current.siteKey && current.siteKey !== siteKey) throw new TurnstileError('Remove the existing Turnstile widget before configuring a different site key.');
-      const widget = validateWidget(await cf<TurnstileWidget>(input.token, `${accountPath(input.account)}/challenges/widgets/${siteKey}`), siteKey, input.hostname);
+      if (!automatic && current.siteKey && current.siteKey !== siteKey) throw new TurnstileError('Remove the existing Turnstile widget before configuring a different site key.');
+      const widget = automatic
+        ? await automaticWidget(query, input, current.siteKey)
+        : validateWidget(await cf<TurnstileWidget>(input.token, `${accountPath(input.account)}/challenges/widgets/${siteKey}`), siteKey, input.hostname);
       await configureTrackerTurnstile(input.token, input.account, widget);
       // The enabled flag and public key are committed together, after verified
       // Worker configuration. Neither the token nor widget secret enters D1.
-      await query("INSERT INTO settings(key,value) VALUES('TURNSTILE_SITE_KEY',?),('TURNSTILE_ENABLED','true') ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')", [siteKey]);
+      await query("INSERT INTO settings(key,value) VALUES('TURNSTILE_SITE_KEY',?),('TURNSTILE_ENABLED','true') ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')", [widget.sitekey]);
+      if (automatic) {
+        // Retaining retry metadata is harmless if cleanup fails after enabling.
+        try { await query("DELETE FROM deployment_metadata WHERE key='turnstile_widget_creation'"); } catch {}
+      }
     } else {
       if (input.confirmDelete !== true || siteKey !== current.siteKey) throw new TurnstileError('Confirm deletion of the currently configured Turnstile widget.');
       // Check permission/existence before changing the app; a missing widget is

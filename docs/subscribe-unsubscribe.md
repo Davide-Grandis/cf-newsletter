@@ -134,11 +134,15 @@ the most machinery. It is **opt-in per newsletter** and **off by default**.
 - **Global, one-time (super admin):**
   - Email Sending (DKIM) must be enabled on the domain (the tracker uses a
     `send_email` binding to deliver the confirmation).
-  - Turnstile starts disabled. Recommended: create a **Cloudflare Turnstile**
-    widget for the tracking domain, set the matching tracker-worker secret with
-    `wrangler secret put TURNSTILE_SECRET_KEY --name cf-newsletter-tracker`, then
-    open **Settings → Subscribe → Public signup**, enter the site key and enable
-    **Turnstile bot protection**.
+  - New installations attempt to configure **Cloudflare Turnstile** automatically.
+    In **Settings → Subscribe**, enabling **Turnstile bot protection** creates or
+    reuses the app's Managed widget for the exact tracking hostname, configures
+    its keys on the tracker, and verifies them before enabling protection. No
+    site key input is needed. Retrying a failed setup reuses the saved widget.
+    The runtime API token requires **Account: Turnstile Edit** and **Workers
+    Scripts Edit**; older installations must upgrade these permissions manually.
+    Disabling requires confirmation: it deletes the widget and removes its
+    tracker keys. The secret key is never stored in application settings.
 
 #### The hosted page & flow
 

@@ -12,6 +12,7 @@ const secret = 'TEST-ONLY-WIDGET-SECRET';
 const account = 'a'.repeat(32);
 const hostname = 'track.example.com';
 const setup = { account, hostname, token, enabled: true, siteKey: key };
+const automaticSetup = { account, hostname, token, enabled: true };
 
 function fixture() {
   const sqlite = new DatabaseSync(':memory:');
@@ -39,11 +40,30 @@ function fixture() {
     { name: 'LINK_SIGNING_KEY', type: 'secret_text' }, { name: 'ATTACHMENT_SIGNING_KEY', type: 'secret_text' },
     { name: 'SEND_EMAIL', type: 'send_email' }, { name: 'APP_VERSION', type: 'plain_text', text: '2.4.1' },
   ];
-  const state = { failWidget: 0, domains: [hostname], failPatch: false, failVerify: false, failDelete: false, deleted: false };
+  const state = {
+    failWidget: 0, domains: [hostname], failPatch: false, failVerify: false, failDelete: false, deleted: false,
+    creations: 0, loseCreateResponse: false, widgets: [] as Array<{ name: string; sitekey: string }>,
+  };
   const network = mock.method(globalThis, 'fetch', async (url, init) => {
     const path = String(url), method = init?.method ?? 'GET';
     requests.push({ path, method, authorization: new Headers(init?.headers).get('authorization') });
     const ok = (result: unknown) => Response.json({ success: true, result });
+    if (new URL(path).pathname.endsWith('/challenges/widgets')) {
+      if (state.failWidget) return Response.json({ success: false, errors: [{ message: secret }] }, { status: state.failWidget });
+      if (method === 'POST') {
+        const body = JSON.parse(init?.body as string);
+        assert.deepEqual(body.domains, [hostname]);
+        assert.equal(body.mode, 'managed');
+        assert.equal(body.clearance_level, 'no_clearance');
+        state.creations++;
+        state.deleted = false;
+        state.widgets.push({ name: body.name, sitekey: key });
+        if (state.loseCreateResponse) throw new Error('Creation response was lost.');
+        return ok({ sitekey: key, secret, domains: state.domains });
+      }
+      const name = new URL(path).searchParams.get('filter')?.slice('name:'.length) ?? '';
+      return ok(state.widgets.filter((widget) => widget.name.includes(name)));
+    }
     if (path.includes('/challenges/widgets/')) {
       if (state.failWidget || state.deleted) return Response.json({ success: false, errors: [{ message: secret }] }, { status: state.failWidget || 404 });
       if (method === 'DELETE') {
@@ -120,6 +140,93 @@ test('only a verified matching widget and tracker configuration can enable prote
   } finally { f.close(); }
 });
 
+test('automatic enable creates the widget, saves no secret in D1, and reuses it on repeated requests', async () => {
+  const f = fixture();
+  try {
+    await changeTurnstile(f.query, automaticSetup);
+    assert.equal(f.state.creations, 1);
+    assert.deepEqual(await readTurnstileConfig(f.query), { enabled: true, siteKey: key });
+    assert.equal((await turnstileStatus(f.query, account, hostname, token)).ready, true);
+    await changeTurnstile(f.query, automaticSetup);
+    assert.equal(f.state.creations, 1);
+    const persisted = JSON.stringify(f.sqlite.prepare('SELECT * FROM settings UNION ALL SELECT key,value,NULL FROM deployment_metadata').all());
+    assert.ok(!persisted.includes(token) && !persisted.includes(secret));
+    assert.equal(f.sqlite.prepare("SELECT value FROM deployment_metadata WHERE key='turnstile_widget_creation'").get(), undefined);
+  } finally { f.close(); }
+});
+
+test('failed tracker writes and verification stay disabled and retry the same automatically created widget', async () => {
+  const f = fixture();
+  try {
+    f.state.failPatch = true;
+    await assert.rejects(changeTurnstile(f.query, automaticSetup), /could not complete/);
+    assert.deepEqual(await readTurnstileConfig(f.query), { enabled: false, siteKey: key });
+    f.state.failPatch = false;
+    f.state.failVerify = true;
+    await assert.rejects(changeTurnstile(f.query, automaticSetup), /could not be verified/);
+    assert.equal((await readTurnstileConfig(f.query)).enabled, false);
+    f.state.failVerify = false;
+    await changeTurnstile(f.query, automaticSetup);
+    assert.equal(f.state.creations, 1);
+    assert.equal((await readTurnstileConfig(f.query)).enabled, true);
+  } finally { f.close(); }
+});
+
+test('automatic setup recovers a lost creation response or failed public-key save without creating duplicates', async () => {
+  for (const failure of ['response', 'database']) {
+    const f = fixture();
+    try {
+      f.state.loseCreateResponse = failure === 'response';
+      let failSave = failure === 'database';
+      const query: typeof f.query = async (sql, params) => {
+        if (failSave && sql.startsWith('INSERT INTO settings')) {
+          failSave = false;
+          throw new Error('D1 temporarily unavailable.');
+        }
+        return f.query(sql, params);
+      };
+      await assert.rejects(changeTurnstile(query, automaticSetup));
+      assert.equal(f.state.creations, 1);
+      assert.deepEqual(await readTurnstileConfig(f.query), { enabled: false, siteKey: '' });
+      f.state.loseCreateResponse = false;
+      await changeTurnstile(query, automaticSetup);
+      assert.equal(f.state.creations, 1);
+      assert.deepEqual(await readTurnstileConfig(f.query), { enabled: true, siteKey: key });
+    } finally { f.close(); }
+  }
+});
+
+test('automatic setup reuses saved widgets and replaces only widgets confirmed missing in Cloudflare', async () => {
+  const f = fixture();
+  try {
+    await changeTurnstile(f.query, setup);
+    await changeTurnstile(f.query, automaticSetup);
+    assert.equal(f.state.creations, 0);
+    f.state.failWidget = 403;
+    await assert.rejects(changeTurnstile(f.query, automaticSetup), /Update the stored runtime token permissions/);
+    assert.equal(f.state.creations, 0);
+    f.state.failWidget = 0;
+    f.state.deleted = true;
+    await changeTurnstile(f.query, automaticSetup);
+    assert.equal(f.state.creations, 1);
+    assert.equal((await readTurnstileConfig(f.query)).enabled, true);
+  } finally { f.close(); }
+});
+
+test('automatic setup rejects missing hostnames and missing permissions before creating widgets', async () => {
+  const f = fixture();
+  try {
+    for (const hostname of ['', 'track.yourdomain.com']) {
+      await assert.rejects(changeTurnstile(f.query, { ...automaticSetup, hostname }), /tracking hostname/);
+    }
+    assert.equal(f.requests.length, 0);
+    f.state.failWidget = 403;
+    await assert.rejects(changeTurnstile(f.query, automaticSetup), /Update the stored runtime token permissions/);
+    assert.equal(f.state.creations, 0);
+    assert.equal((await readTurnstileConfig(f.query)).enabled, false);
+  } finally { f.close(); }
+});
+
 test('disabling requires exact-key confirmation, removes tracker keys, deletes the widget, and clears the saved public key', async () => {
   const f = fixture();
   try {
@@ -180,7 +287,8 @@ test('settings API cannot bypass setup, and only same-origin super-admin request
     const runtimeToken = 'TEST-ONLY-STORED-RUNTIME-CREDENTIAL';
     f.env.CF_API_TOKEN = runtimeToken;
     // Browser-supplied credentials must never override the stored secret.
-    assert.equal((await admin.fetch(request('/api/settings/turnstile', { ...setup, token: 'UNTRUSTED-BROWSER-CREDENTIAL' }), f.env, ctx)).status, 200);
+    assert.equal((await admin.fetch(request('/api/settings/turnstile', { enabled: true, token: 'UNTRUSTED-BROWSER-CREDENTIAL' }), f.env, ctx)).status, 200);
+    assert.equal(f.state.creations, 1);
     const response = await admin.fetch(new Request('https://console.example.com/api/settings/turnstile', { headers: { 'cf-access-authenticated-user-email': 'root@example.com' } }), f.env, ctx);
     const data = await response.json() as { ready: boolean };
     assert.equal(data.ready, true);
