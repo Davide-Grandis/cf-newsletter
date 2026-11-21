@@ -41,7 +41,7 @@ async function cf<T>(token: string, path: string, init: RequestInit = {}, allowM
   }
   if (allowMissing && response.status === 404) return null;
   if (response.status === 401 || response.status === 403) {
-    throw new TurnstileError('The configured API token needs Account: Turnstile Edit and Workers Scripts Edit on this account. Update the stored runtime token permissions for Settings operations.', 403);
+    throw new TurnstileError('Error: The configured API token needs Account: Turnstile Edit and Workers Scripts Edit on this account. Update the stored runtime token permissions and try again.', 403);
   }
   if (response.status === 404) throw new TurnstileError('The site key or tracker Worker was not found in this Cloudflare account.');
   if (!response.ok) throw new TurnstileError(`Cloudflare could not complete the Turnstile operation (HTTP ${response.status}).`, 502);
