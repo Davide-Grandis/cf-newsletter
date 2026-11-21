@@ -204,7 +204,7 @@ export default function NewsletterDetail() {
           <TabButton active={tab === 'signup'} onClick={() => setTab('signup')}>
             Signup
           </TabButton>
-          <TabButton active={tab === 'tracking'} onClick={() => setTab('tracking')}>
+          <TabButton active={tab === 'tracking'} onClick={() => { setTab('tracking'); qc.invalidateQueries({ queryKey: ['me'] }); }}>
             Tracking
           </TabButton>
         </div>

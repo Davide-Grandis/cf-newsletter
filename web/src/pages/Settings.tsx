@@ -432,6 +432,7 @@ export default function Settings() {
       await qc.invalidateQueries({ queryKey: ['settings'] });
       // Warmup display depends on these settings; refresh it too.
       await qc.invalidateQueries({ queryKey: ['email-sending-stats'] });
+      await qc.invalidateQueries({ queryKey: ['me'] });
     },
     onError: (e, updates) => {
       const key = Object.keys(updates)[0] ?? '';
