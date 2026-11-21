@@ -163,9 +163,12 @@ multipart/mixed
 └── attachments (base64, Content-Disposition: attachment)
 ```
 
-Plus headers: `Message-ID`, `List-Unsubscribe` (with both URL and mailto),
-`List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058 — required
-by Gmail/Yahoo bulk-sender rules).
+Plus headers: `Date`, `Message-ID`, `List-Unsubscribe` (with both URL and
+mailto), `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058 —
+required by Gmail/Yahoo bulk-sender rules), and
+`List-Id: "<newsletter name>" <<newsletter id>.<BASE_DOMAIN>>` (RFC 2919). The
+List-Id uses the immutable newsletter id, so renaming a newsletter or changing
+its slug does not break subscribers' mail filters.
 
 Address headers (`From`, `To`, `Reply-To`) are rendered by `formatAddress()`
 in `shared/mime.ts`: display names are stripped of control characters, quoted

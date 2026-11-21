@@ -126,7 +126,7 @@ wrangler r2 object put cf-newsletter-admin/header.png \
     - `multipart/related` (HTML + inline images via `cid:<content_id>`)
       - `multipart/alternative` (text + html with tracking pixel + signed click links)
     - One `attachment` part per non-inline file: base64, `Content-Disposition: attachment; filename="..."`, correct `Content-Type`.
-  - Headers: `From`, `To`, `Subject`, `Message-ID`, `List-Unsubscribe`, `List-Unsubscribe-Post: List-Unsubscribe=One-Click`.
+  - Headers: `From`, `To`, `Subject`, `Date`, `Message-ID`, `List-Id`, `List-Unsubscribe`, `List-Unsubscribe-Post: List-Unsubscribe=One-Click`.
 - Pre-flight size guard: reject batch early if total MIME (×1.34 base64 overhead) exceeds `MAX_RAW_BYTES`.
 - `await env.SEND_EMAIL.send(new EmailMessage(from, to, raw))`.
 - On success → update `sends`, increment `campaigns.sent_count`.

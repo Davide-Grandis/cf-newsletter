@@ -1,5 +1,5 @@
 import { EmailMessage } from 'cloudflare:email';
-import { buildEmail, estimateRawSize, type AttachmentPart } from '../../../shared/mime';
+import { buildEmail, estimateRawSize, formatListId, type AttachmentPart } from '../../../shared/mime';
 import { getAttachmentBytes } from '../../../shared/attachments';
 import {
   getCampaign,
@@ -248,6 +248,7 @@ export default {
               headers: {
                 'List-Unsubscribe': `<${unsubUrl}>, <mailto:${mailtoUnsubscribeAddress(r.subscriberId, r.token, env.BASE_DOMAIN)}>`,
                 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                'List-Id': formatListId(campaign.newsletter_name, campaign.newsletter_id, env.BASE_DOMAIN),
                 'X-Campaign-ID': campaignId,
               },
             });

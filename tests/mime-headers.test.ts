@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildEmail, formatAddress, parseAddress, sanitizeDisplayName } from '../shared/mime';
+import { buildEmail, formatAddress, formatEmailDate, formatListId, parseAddress, sanitizeDisplayName } from '../shared/mime';
 import { mailtoUnsubscribeAddress, mailtoTokenMatches, parseMailtoUnsubscribe } from '../shared/tracking';
 
 const headersOf = (raw: string) => raw.split('\r\n\r\n')[0]!;
@@ -89,4 +89,24 @@ test('mailto unsubscribe rejects legacy, malformed and wrong-token addresses', (
   const parsed = parseMailtoUnsubscribe('unsubscribe+42.00000000000000000000000000000000@example.com')!;
   assert.equal(mailtoTokenMatches('3f2504e0-4f89-11d3-9a0c-0305e82c3301', parsed.token), false);
   assert.equal(mailtoTokenMatches('', ''), false);
+});
+
+test('every message carries an RFC 5322 Date header', () => {
+  const head = headersOf(buildEmail({ ...base, to: 'x@example.com', date: new Date(Date.UTC(2026, 10, 1, 8, 5, 9)) }));
+  assert.match(head, /^Date: Sun, 01 Nov 2026 08:05:09 \+0000$/m);
+  assert.match(headersOf(buildEmail({ ...base, to: 'x@example.com' })), /^Date: [A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} \+0000$/m);
+  assert.equal(new Date(formatEmailDate(new Date(0))).getTime(), 0);
+});
+
+test('List-Id uses the stable newsletter id and a safe description', () => {
+  const id = '3F2504E0-4F89-11D3-9A0C-0305E82C3301';
+  assert.equal(formatListId('Weekly News', id, 'Example.com'), 'Weekly News <3f2504e0-4f89-11d3-9a0c-0305e82c3301.example.com>');
+  assert.equal(formatListId('News, Updates', 'default', 'example.com'), '"News, Updates" <default.example.com>');
+  assert.equal(formatListId('', 'default', 'example.com'), '<default.example.com>');
+  assert.match(formatListId('Café Nouvelles', 'default', 'example.com'), /^=\?UTF-8\?B\?[A-Za-z0-9+/=]+\?= <default\.example\.com>$/);
+  assert.equal(formatListId('Evil\r\nBcc: a@b.c', 'x>\r\nBcc: y', 'example.com'), '"Evil Bcc: a@b.c" <xbccy.example.com>');
+  const head = headersOf(buildEmail({ ...base, to: 'x@example.com', headers: { 'List-Id': formatListId('Ünïcödé '.repeat(10), 'default', 'example.com') } }));
+  const line = head.split('\r\n').find((l) => l.startsWith('List-Id:'))!;
+  assert.match(line, /<default\.example\.com>$/);
+  assert.doesNotMatch(head, /^Bcc:/m);
 });

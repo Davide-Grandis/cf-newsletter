@@ -19,6 +19,8 @@ export interface BuildEmailInput {
   to: Address;
   subject: string;
   messageId: string;
+  // Origination date; defaults to now. Rendered as an RFC 5322 Date header.
+  date?: Date;
   replyTo?: Address;
   text: string;
   html: string;
@@ -68,7 +70,7 @@ function utf8Bin(value: string): string {
 
 // RFC 2047 encoded-words, each at most 75 characters (45 UTF-8 bytes of
 // payload), split on code-point boundaries and folded onto continuation lines.
-function encodeWords(value: string): string {
+function encodeWords(value: string, separator = `${CRLF} `): string {
   const words: string[] = [];
   let chunk = '';
   for (const ch of value) {
@@ -79,7 +81,7 @@ function encodeWords(value: string): string {
     chunk += ch;
   }
   if (chunk) words.push(`=?UTF-8?B?${btoa(utf8Bin(chunk))}?=`);
-  return words.join(`${CRLF} `);
+  return words.join(separator);
 }
 
 function encodeHeader(value: string): string {
@@ -105,12 +107,37 @@ function cleanAddr(email: string): string {
 export function formatAddress(name: string | null | undefined, email: string): string {
   const addr = cleanAddr(email);
   const display = sanitizeDisplayName(name ?? '');
-  if (!display) return addr;
-  let rendered: string;
-  if (!/^[\x20-\x7E]*$/.test(display)) rendered = encodeWords(display);
-  else if (/[()<>\[\]:;@\\,."]/.test(display)) rendered = `"${display.replace(/(["\\])/g, '\\$1')}"`;
-  else rendered = display;
-  return `${rendered} <${addr}>`;
+  return display ? `${renderPhrase(display)} <${addr}>` : addr;
+}
+
+// RFC 5322 phrase: bare when safe, quoted when it has specials, RFC 2047 when non-ASCII.
+function renderPhrase(display: string, separator?: string): string {
+  if (!/^[\x20-\x7E]*$/.test(display)) return encodeWords(display, separator);
+  if (/[()<>\[\]:;@\\,."]/.test(display)) return `"${display.replace(/(["\\])/g, '\\$1')}"`;
+  return display;
+}
+
+/**
+ * RFC 2919 List-Id value: an optional description phrase plus a stable,
+ * globally unique identifier `<listId>.<domain>`. Use an immutable id (not a
+ * renameable name or slug) so mail filters keep matching the list.
+ */
+export function formatListId(name: string | null | undefined, listId: string, domain: string): string {
+  const label = listId.toLowerCase().replace(/[^a-z0-9-]/g, '');
+  const host = domain.toLowerCase().replace(/[^a-z0-9.-]/g, '').replace(/^\.+|\.+$/g, '');
+  const display = sanitizeDisplayName(name ?? '');
+  const id = `<${label}.${host}>`;
+  return display ? `${renderPhrase(display, ' ')} ${id}` : id;
+}
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** RFC 5322 date-time in UTC, e.g. 'Sat, 21 Nov 2026 18:39:00 +0000'. */
+export function formatEmailDate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${DAYS[d.getUTCDay()]}, ${p(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()} ` +
+    `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())} +0000`;
 }
 
 /** Split a header-style address ('addr' or 'Name <addr>', name optionally quoted). */
@@ -171,6 +198,7 @@ export function buildEmail(input: BuildEmailInput): string {
   if (input.replyTo) lines.push(`Reply-To: ${renderAddress(input.replyTo)}`);
   lines.push(`To: ${renderAddress(input.to)}`);
   lines.push(`Subject: ${encodeHeader(input.subject)}`);
+  lines.push(`Date: ${formatEmailDate(input.date ?? new Date())}`);
   lines.push(`Message-ID: <${cleanAddr(input.messageId)}>`);
   lines.push('MIME-Version: 1.0');
   for (const [k, v] of Object.entries(input.headers ?? {})) {
