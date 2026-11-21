@@ -61,15 +61,11 @@ export default function TurnstileSettings() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 id="turnstile-label" className="text-sm font-medium">Turnstile bot protection</h3>
-            <p id="turnstile-status" className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {enabled ? 'Enabled. Public signup requires Turnstile verification.' : data.enabled ? 'Disabled. Turnstile verification failed; enable it again to retry setup.' : 'Disabled. Public signup is available without bot protection.'}
-            </p>
           </div>
           <button
             type="button"
             role="switch"
             aria-labelledby="turnstile-label"
-            aria-describedby="turnstile-status"
             aria-checked={enabled}
             aria-busy={saving}
             disabled={saving || (!enabled && !configuredHostname)}
@@ -84,17 +80,11 @@ export default function TurnstileSettings() {
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
           </button>
         </div>
-        {!saving && data.enabled && !enabled && !data.checkError && (
-          <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">
-            The tracker keys could not be verified. Protected signup may be unavailable until Turnstile is successfully configured again.
+        {!configuredHostname && (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Configure the tracking hostname in Tracking &amp; bounce before enabling Turnstile.
           </p>
         )}
-        {!saving && data.checkError && <p className="text-xs text-amber-700 dark:text-amber-400">{data.checkError}</p>}
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          {configuredHostname
-            ? <>Enabling automatically creates or reuses the app&apos;s Turnstile widget for <code className="break-all">{data.hostname}</code> and securely configures its keys.</>
-            : 'Configure the tracking hostname in Tracking & bounce before enabling Turnstile.'}
-        </p>
         {saving && <p role="status" className="text-sm text-slate-500">Saving and verifying Turnstile configuration with Cloudflare...</p>}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         {message && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">{message}</p>}
