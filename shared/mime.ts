@@ -10,12 +10,16 @@ export interface AttachmentPart {
   disposition: 'attachment' | 'inline';
 }
 
+// An address is either a header-style string ('addr' or 'Name <addr>') or a
+// structured name/email pair. Either form is re-rendered safely by buildEmail.
+export type Address = string | { name?: string | null; email: string };
+
 export interface BuildEmailInput {
-  from: string;
-  to: string;
+  from: Address;
+  to: Address;
   subject: string;
   messageId: string;
-  replyTo?: string;
+  replyTo?: Address;
   text: string;
   html: string;
   headers?: Record<string, string>;
@@ -42,13 +46,88 @@ function b64(bytes: Uint8Array): string {
   return out.match(/.{1,76}/g)?.join(CRLF) ?? out;
 }
 
-function encodeHeader(value: string): string {
-  // RFC 2047 encoded-word for non-ASCII subjects/filenames.
-  if (/^[\x20-\x7E]*$/.test(value)) return value;
-  const utf8 = new TextEncoder().encode(value);
+// Header values must never carry CR/LF or other control characters: a line
+// break would let data start a new header (header injection).
+function stripControl(value: string): string {
+  return value.replace(/[\x00-\x1F\x7F]+/g, ' ');
+}
+
+/**
+ * Normalise a human display name (e.g. a subscriber name) for storage and
+ * header use: control characters become spaces, whitespace is collapsed.
+ */
+export function sanitizeDisplayName(name: string): string {
+  return stripControl(name).replace(/\s+/g, ' ').trim();
+}
+
+function utf8Bin(value: string): string {
   let bin = '';
-  for (const b of utf8) bin += String.fromCharCode(b);
-  return `=?UTF-8?B?${btoa(bin)}?=`;
+  for (const b of new TextEncoder().encode(value)) bin += String.fromCharCode(b);
+  return bin;
+}
+
+// RFC 2047 encoded-words, each at most 75 characters (45 UTF-8 bytes of
+// payload), split on code-point boundaries and folded onto continuation lines.
+function encodeWords(value: string): string {
+  const words: string[] = [];
+  let chunk = '';
+  for (const ch of value) {
+    if (chunk && utf8Bin(chunk + ch).length > 45) {
+      words.push(`=?UTF-8?B?${btoa(utf8Bin(chunk))}?=`);
+      chunk = '';
+    }
+    chunk += ch;
+  }
+  if (chunk) words.push(`=?UTF-8?B?${btoa(utf8Bin(chunk))}?=`);
+  return words.join(`${CRLF} `);
+}
+
+function encodeHeader(value: string): string {
+  // RFC 2047 encoded-word for non-ASCII subjects.
+  const clean = stripControl(value);
+  return /^[\x20-\x7E]*$/.test(clean) ? clean : encodeWords(clean);
+}
+
+function encodeParam(value: string): string {
+  // Filename parameter inside a quoted string: single encoded-word, no quotes.
+  const clean = stripControl(value).replace(/"/g, '');
+  return /^[\x20-\x7E]*$/.test(clean) ? clean : `=?UTF-8?B?${btoa(utf8Bin(clean))}?=`;
+}
+
+function cleanAddr(email: string): string {
+  return email.replace(/[\x00-\x20\x7F<>"(),;:\\[\]]/g, '');
+}
+
+/**
+ * Render an RFC 5322 mailbox. The display name is sanitised and either
+ * quoted (ASCII with specials) or RFC 2047-encoded (non-ASCII).
+ */
+export function formatAddress(name: string | null | undefined, email: string): string {
+  const addr = cleanAddr(email);
+  const display = sanitizeDisplayName(name ?? '');
+  if (!display) return addr;
+  let rendered: string;
+  if (!/^[\x20-\x7E]*$/.test(display)) rendered = encodeWords(display);
+  else if (/[()<>\[\]:;@\\,."]/.test(display)) rendered = `"${display.replace(/(["\\])/g, '\\$1')}"`;
+  else rendered = display;
+  return `${rendered} <${addr}>`;
+}
+
+/** Split a header-style address ('addr' or 'Name <addr>', name optionally quoted). */
+export function parseAddress(value: string): { name: string; email: string } {
+  const v = stripControl(value).trim();
+  const m = /^(.*?)\s*<([^<>\s]+)>\s*$/.exec(v);
+  if (!m) return { name: '', email: v };
+  let name = m[1]!.trim();
+  if (name.length >= 2 && name.startsWith('"') && name.endsWith('"')) {
+    name = name.slice(1, -1).replace(/\\(.)/g, '$1');
+  }
+  return { name, email: m[2]! };
+}
+
+function renderAddress(a: Address): string {
+  const { name, email } = typeof a === 'string' ? parseAddress(a) : { name: a.name ?? '', email: a.email };
+  return formatAddress(name, email);
 }
 
 function quotedPrintable(text: string): string {
@@ -88,14 +167,15 @@ export function buildEmail(input: BuildEmailInput): string {
   const fileParts = input.attachments.filter((a) => a.disposition === 'attachment');
 
   const lines: string[] = [];
-  lines.push(`From: ${input.from}`);
-  if (input.replyTo) lines.push(`Reply-To: ${input.replyTo}`);
-  lines.push(`To: ${input.to}`);
+  lines.push(`From: ${renderAddress(input.from)}`);
+  if (input.replyTo) lines.push(`Reply-To: ${renderAddress(input.replyTo)}`);
+  lines.push(`To: ${renderAddress(input.to)}`);
   lines.push(`Subject: ${encodeHeader(input.subject)}`);
-  lines.push(`Message-ID: <${input.messageId}>`);
+  lines.push(`Message-ID: <${cleanAddr(input.messageId)}>`);
   lines.push('MIME-Version: 1.0');
   for (const [k, v] of Object.entries(input.headers ?? {})) {
-    lines.push(`${k}: ${v}`);
+    if (!/^[A-Za-z0-9_-]+$/.test(k)) throw new Error(`invalid header name: ${k}`);
+    lines.push(`${k}: ${stripControl(v)}`);
   }
   lines.push(`Content-Type: multipart/mixed; boundary="${mixed}"`);
   lines.push('');
@@ -132,10 +212,10 @@ export function buildEmail(input: BuildEmailInput): string {
   // inline parts (referenced by cid:)
   for (const a of inlineParts) {
     lines.push(`--${related}`);
-    lines.push(`Content-Type: ${a.contentType}; name="${encodeHeader(a.filename)}"`);
+    lines.push(`Content-Type: ${stripControl(a.contentType)}; name="${encodeParam(a.filename)}"`);
     lines.push('Content-Transfer-Encoding: base64');
-    lines.push(`Content-Disposition: inline; filename="${encodeHeader(a.filename)}"`);
-    if (a.contentId) lines.push(`Content-ID: <${a.contentId}>`);
+    lines.push(`Content-Disposition: inline; filename="${encodeParam(a.filename)}"`);
+    if (a.contentId) lines.push(`Content-ID: <${cleanAddr(a.contentId)}>`);
     lines.push('');
     lines.push(b64(a.bytes));
     lines.push('');
@@ -146,9 +226,9 @@ export function buildEmail(input: BuildEmailInput): string {
   // attachments
   for (const a of fileParts) {
     lines.push(`--${mixed}`);
-    lines.push(`Content-Type: ${a.contentType}; name="${encodeHeader(a.filename)}"`);
+    lines.push(`Content-Type: ${stripControl(a.contentType)}; name="${encodeParam(a.filename)}"`);
     lines.push('Content-Transfer-Encoding: base64');
-    lines.push(`Content-Disposition: attachment; filename="${encodeHeader(a.filename)}"`);
+    lines.push(`Content-Disposition: attachment; filename="${encodeParam(a.filename)}"`);
     lines.push('');
     lines.push(b64(a.bytes));
     lines.push('');

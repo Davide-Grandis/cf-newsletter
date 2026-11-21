@@ -23,7 +23,7 @@ import {
   dayStartSql,
   type WarmupState,
 } from '../../../shared/warmup';
-import { buildEmail } from '../../../shared/mime';
+import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
 import { sanitizeFooterHtml } from '../../../shared/footer';
 import { sanitizeMailMergeHtml, MAIL_MERGE_HTML_MAX, MAIL_MERGE_TEXT_MAX } from '../../../shared/mail-merge';
 import {
@@ -1781,7 +1781,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
             "INSERT INTO subscribers (newsletter_id, email, name, token) VALUES (?, ?, ?, ?) " +
               "ON CONFLICT(newsletter_id, email) DO UPDATE SET status='active', name=COALESCE(excluded.name, subscribers.name)",
           )
-          .bind(nid, email, name ?? null, token)
+          .bind(nid, email, (typeof name === 'string' && sanitizeDisplayName(name)) || null, token)
           .run();
         return Response.json({ ok: true });
       }
@@ -1884,7 +1884,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           continue;
         }
         seen.add(key);
-        const name = nIdx >= 0 ? ((cols[nIdx] ?? '').trim() || null) : null;
+        const name = nIdx >= 0 ? (sanitizeDisplayName(cols[nIdx] ?? '') || null) : null;
         const verified = parseBool(cols[vIdx]) ? 1 : 0;
         const subscribedAt = fmtDate((cols[dIdx] ?? '').trim());
         const token = crypto.randomUUID();
@@ -1948,9 +1948,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           `Confirm your subscription to ${nl.name}\n\n` +
           `Please confirm you want to receive ${nl.name} at this address by opening:\n${verifyUrl}\n\n` +
           `If you didn't request this, ignore this email — no subscription is created until you confirm.`;
-        const nameQ = sub.name ?? '';
-        const toHeader = nameQ ? `${(/[",<>]/.test(nameQ) ? `"${nameQ.replace(/"/g, '\\"')}"` : nameQ)} <${sub.email}>` : sub.email;
-        const raw = buildEmail({ from: fromHeader, to: toHeader, subject, messageId, text, html, attachments: [], headers: { 'X-Entity-Ref-ID': messageId } });
+        const raw = buildEmail({ from: fromHeader, to: { name: sub.name, email: sub.email }, subject, messageId, text, html, attachments: [], headers: { 'X-Entity-Ref-ID': messageId } });
         await env.SEND_EMAIL.send(new EmailMessage(fromAddr, sub.email, raw));
       }
       return Response.json({ ok: true });
@@ -1972,7 +1970,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         const binds: unknown[] = [];
         if ('name' in body) {
           sets.push('name = ?');
-          binds.push(body.name);
+          binds.push((typeof body.name === 'string' && sanitizeDisplayName(body.name)) || null);
         }
         if (body.status) {
           sets.push('status = ?');

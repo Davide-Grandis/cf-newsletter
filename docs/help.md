@@ -189,7 +189,7 @@ is rewritten. The transformations are:
 - **Unsubscribe.** A `List-Unsubscribe` header is added so mail clients can show
   a native unsubscribe button. It offers two methods: a one-click HTTPS `POST`
   to `…/u/<subscriber>?t=<token>` (RFC 8058, handled by the tracker), and a
-  `mailto:unsubscribe+<id>@…` fallback (handled by the bounce worker via the
+  `mailto:unsubscribe+<id>.<token>@…` fallback (handled by the bounce worker via the
   existing catch-all inbound route — no extra routing rule needed). The same
   `…/u/<subscriber>?t=<token>` link is also used by the footer's unsubscribe
   link. Both methods mark the subscriber unsubscribed.

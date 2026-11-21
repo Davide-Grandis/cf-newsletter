@@ -1,6 +1,6 @@
 import { EmailMessage } from 'cloudflare:email';
 import { verifyHmac } from '../../../shared/tracking';
-import { buildEmail } from '../../../shared/mime';
+import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
 import { loadSettings, resolveTrackingBaseUrl } from '../../../shared/settings';
 import { writeLog } from '../../../shared/db';
 
@@ -220,7 +220,7 @@ async function handleSubscribe(
   if (req.method === 'POST') {
     const form = await req.formData().catch(() => null);
     const email = String(form?.get('email') ?? '').trim().toLowerCase();
-    const name = String(form?.get('name') ?? '').trim();
+    const name = sanitizeDisplayName(String(form?.get('name') ?? '')).slice(0, 200);
     const tsToken = String(form?.get('cf-turnstile-response') ?? '');
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -397,7 +397,7 @@ async function sendConfirmationEmail(
     `If you didn't request this, ignore this email — no subscription is created until you confirm.`;
   const raw = buildEmail({
     from: fromHeader,
-    to: name ? `${quoteName(name)} <${email}>` : email,
+    to: { name, email },
     subject,
     messageId,
     text,
@@ -411,10 +411,6 @@ async function sendConfirmationEmail(
 function extractAddr(header: string): string {
   const m = header.match(/<([^>]+)>/);
   return m?.[1] ?? header.trim();
-}
-
-function quoteName(name: string): string {
-  return /[",<>]/.test(name) ? `"${name.replace(/"/g, '\\"')}"` : name;
 }
 
 function htmlResponse(body: string, status = 200): Response {

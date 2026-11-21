@@ -145,7 +145,7 @@ wrangler r2 object put cf-newsletter-admin/header.png \
 
 ### `bounce-worker` (Email + Cron Worker)
 
-- `email` handler: processes `List-Unsubscribe` mailto replies (`unsubscribe+<id>@`) — marks subscriber unsubscribed and inserts an unsubscribe event.
+- `email` handler: processes `List-Unsubscribe` mailto replies (`unsubscribe+<id>.<token>@`, token verified) — marks subscriber unsubscribed and inserts an unsubscribe event.
 - `scheduled` handler: queries the Cloudflare Email Sending GraphQL API for delivery failures in the last 25 hours; classifies hard/soft; updates subscriber bounce counters; marks `bounced` after threshold; inserts `events(type='bounce')`.
 
 ### `cleanup-worker` (Cron Trigger)
@@ -259,7 +259,7 @@ newsletter/
 confirmation email → `GET /verify/<id>?t=` confirms (double opt-in) before any
 mail is sent.
 
-**Unsubscribe**: One-click `POST /u/:sub` (HMAC token) or `mailto:unsubscribe+<id>@` → `subscribers.status='unsubscribed'`.
+**Unsubscribe**: One-click `POST /u/:sub` (HMAC token) or `mailto:unsubscribe+<id>.<token>@` → `subscribers.status='unsubscribed'`.
 
 **Retention**: Cleanup Worker (cron) prunes R2 + D1 per `RETENTION_DAYS`.
 

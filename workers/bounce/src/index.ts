@@ -1,5 +1,6 @@
 import { loadSettings } from '../../../shared/settings';
 import { writeLog } from '../../../shared/db';
+import { parseMailtoUnsubscribe, mailtoTokenMatches } from '../../../shared/tracking';
 
 export interface Env {
   DB: D1Database;
@@ -31,27 +32,49 @@ export default {
     const env = await loadSettings(rawEnv.DB, rawEnv);
     const to = (message.to ?? '').toLowerCase();
 
-    // RFC 8058 mailto unsubscribe: unsubscribe+<subscriberId>@<domain>. The
-    // consumer advertises this in List-Unsubscribe; it lands here because the
-    // bounce worker is the catch-all inbound route. The sender's own mail
-    // provider is the proof of intent (a mailto carries no token), matching
-    // standard one-click-by-email behaviour.
-    const unsub = /unsubscribe\+(\d+)@/.exec(to);
-    if (unsub) {
-      const sub = Number(unsub[1]);
-      const res = await env.DB
-        .prepare(
-          "UPDATE subscribers SET status='unsubscribed', verified=0, unsubscribed_at=datetime('now') " +
-            "WHERE id = ? AND status='active'",
-        )
-        .bind(sub)
+    // RFC 8058 mailto unsubscribe: unsubscribe+<subscriberId>.<token>@<domain>.
+    // The consumer advertises this in List-Unsubscribe; it lands here because
+    // the bounce worker is the catch-all inbound route. The local part carries
+    // the subscriber's unsubscribe token, so ids alone (which are sequential)
+    // can't be used to unsubscribe other people. The legacy token-less form
+    // (unsubscribe+<id>@) is ignored; those emails still offer the HTTPS link.
+    if (!to.startsWith('unsubscribe+')) return;
+    const unsub = parseMailtoUnsubscribe(to);
+    const row = unsub
+      ? await env.DB
+          .prepare('SELECT token, newsletter_id FROM subscribers WHERE id = ?')
+          .bind(unsub.subscriberId)
+          .first<{ token: string; newsletter_id: string }>()
+      : null;
+    if (!unsub || !row || !mailtoTokenMatches(row.token, unsub.token)) {
+      await writeLog(env.DB, {
+        level: 'warn',
+        source: 'bounce',
+        event: 'bounce.mailto_unsubscribe_rejected',
+        message: 'Ignored mailto unsubscribe with a missing or invalid token',
+        detail: { reason: unsub ? (row ? 'invalid_token' : 'unknown_subscriber') : 'malformed_or_legacy' },
+      });
+      return;
+    }
+    const res = await env.DB
+      .prepare(
+        "UPDATE subscribers SET status='unsubscribed', verified=0, unsubscribed_at=datetime('now') " +
+          "WHERE id = ? AND status='active'",
+      )
+      .bind(unsub.subscriberId)
+      .run();
+    if (res.meta?.changes) {
+      await env.DB
+        .prepare("INSERT INTO events (campaign_id, subscriber_id, type) VALUES (NULL, ?, 'unsubscribe')")
+        .bind(unsub.subscriberId)
         .run();
-      if (res.meta?.changes) {
-        await env.DB
-          .prepare("INSERT INTO events (campaign_id, subscriber_id, type) VALUES (NULL, ?, 'unsubscribe')")
-          .bind(sub)
-          .run();
-      }
+      await writeLog(env.DB, {
+        source: 'bounce',
+        event: 'bounce.mailto_unsubscribe',
+        newsletterId: row.newsletter_id,
+        message: `Subscriber ${unsub.subscriberId} unsubscribed by email`,
+        detail: { subscriberId: unsub.subscriberId },
+      });
     }
   },
 };

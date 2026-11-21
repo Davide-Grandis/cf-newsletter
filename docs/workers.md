@@ -167,6 +167,12 @@ Plus headers: `Message-ID`, `List-Unsubscribe` (with both URL and mailto),
 `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058 — required
 by Gmail/Yahoo bulk-sender rules).
 
+Address headers (`From`, `To`, `Reply-To`) are rendered by `formatAddress()`
+in `shared/mime.ts`: display names are stripped of control characters, quoted
+when they contain specials, and RFC 2047-encoded when non-ASCII. Every other
+header value has CR/LF removed, and custom header names are validated, so
+subscriber data can never start a new header line.
+
 **5. Send.**
 
 ```ts
@@ -295,12 +301,15 @@ GraphQL API for delivery failures and record them as bounces.
 ### Email handler — mailto unsubscribes
 
 The bounce worker is the catch-all inbound route. Inbound mail addressed
-to `unsubscribe+<subscriberId>@<domain>` (advertised in `List-Unsubscribe`
-headers by the consumer) is handled here:
+to `unsubscribe+<subscriberId>.<token>@<domain>` (advertised in
+`List-Unsubscribe` headers by the consumer) is handled here:
 
-1. Match `unsubscribe+(⧘+)@` in `message.to`.
-2. `UPDATE subscribers SET status='unsubscribed'` where `id = <sub> AND status = 'active'`.
-3. If a row changed, insert `events(type='unsubscribe')`.
+1. Parse `unsubscribe+<id>.<token>@` from `message.to` (`parseMailtoUnsubscribe()`).
+2. Verify `<token>` against the subscriber's unsubscribe token (constant time);
+   otherwise log `mailto_unsubscribe_rejected` and stop. The legacy
+   token-less `unsubscribe+<id>@` form is rejected.
+3. `UPDATE subscribers SET status='unsubscribed'` where `id = <sub> AND status = 'active'`.
+4. If a row changed, insert `events(type='unsubscribe')` and log `mailto_unsubscribe`.
 
 All other inbound mail is silently dropped (no state mutation).
 

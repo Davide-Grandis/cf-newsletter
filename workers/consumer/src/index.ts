@@ -14,7 +14,7 @@ import {
   advanceWarmupState,
   saveDailyCap,
 } from '../../../shared/db';
-import { instrumentHtml, unsubscribeUrl, signDownloadUrl } from '../../../shared/tracking';
+import { instrumentHtml, unsubscribeUrl, signDownloadUrl, mailtoUnsubscribeAddress } from '../../../shared/tracking';
 import { resolveFooter, renderFooterHtml, renderFooterText } from '../../../shared/footer';
 import { applyMailMerge } from '../../../shared/mail-merge';
 import type { QueueMessage } from '../../../shared/types';
@@ -238,7 +238,7 @@ export default {
 
             const raw = buildEmail({
               from: fromHeader,
-              to: r.name ? `${quoteName(r.name)} <${r.email}>` : r.email,
+              to: { name: r.name, email: r.email },
               subject: campaign.subject,
               messageId,
               replyTo: campaign.reply_to_address ?? undefined,
@@ -246,7 +246,7 @@ export default {
               html,
               attachments: parts,
               headers: {
-                'List-Unsubscribe': `<${unsubUrl}>, <mailto:unsubscribe+${r.subscriberId}@${env.BASE_DOMAIN}>`,
+                'List-Unsubscribe': `<${unsubUrl}>, <mailto:${mailtoUnsubscribeAddress(r.subscriberId, r.token, env.BASE_DOMAIN)}>`,
                 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
                 'X-Campaign-ID': campaignId,
               },
@@ -347,10 +347,6 @@ async function renderRecipientHtml(
 function extractAddr(header: string): string {
   const m = header.match(/<([^>]+)>/);
   return m?.[1] ?? header.trim();
-}
-
-function quoteName(name: string): string {
-  return /[",<>]/.test(name) ? `"${name.replace(/"/g, '\\"')}"` : name;
 }
 
 function escapeHtml(s: string): string {

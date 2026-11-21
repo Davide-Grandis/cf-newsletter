@@ -63,6 +63,34 @@ export function unsubscribeUrl(base: string, subscriberId: number, token: string
   return `${base}/u/${subscriberId}?t=${encodeURIComponent(token)}${c}`;
 }
 
+// RFC 8058 mailto unsubscribe target. The subscriber's unsubscribe token is
+// carried in the local part so a mailto can't be forged for an arbitrary
+// (sequential) subscriber id. Tokens are UUIDs: hyphens are dropped and the
+// value lowercased so the address stays within the 64-char local-part limit
+// and survives case-folding by mail systems.
+function compactToken(token: string): string {
+  return token.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+export function mailtoUnsubscribeAddress(subscriberId: number, token: string, domain: string): string {
+  return `unsubscribe+${subscriberId}.${compactToken(token)}@${domain}`;
+}
+
+export function parseMailtoUnsubscribe(to: string): { subscriberId: number; token: string } | null {
+  const m = /^unsubscribe\+(\d+)\.([a-z0-9]+)@/i.exec(to.trim());
+  return m ? { subscriberId: Number(m[1]), token: m[2]!.toLowerCase() } : null;
+}
+
+/** Constant-time check of a presented mailto token against the stored token. */
+export function mailtoTokenMatches(storedToken: string, presented: string): boolean {
+  const a = compactToken(storedToken);
+  const b = compactToken(presented);
+  if (!a || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 // Rewrite all <a href="..."> in HTML to signed click URLs and append the open pixel.
 export async function instrumentHtml(
   html: string,

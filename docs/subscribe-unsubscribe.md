@@ -252,7 +252,7 @@ builds:
 - Headers:
 
   ```
-  List-Unsubscribe: <https://track.<domain>/u/<id>?t=<token>>, <mailto:unsubscribe+<id>@<domain>>
+  List-Unsubscribe: <https://track.<domain>/u/<id>?t=<token>>, <mailto:unsubscribe+<id>.<token>@<domain>>
   List-Unsubscribe-Post: List-Unsubscribe=One-Click
   ```
 
@@ -285,24 +285,33 @@ subscriber and can't be forged by guessing IDs.
 
 ### 3.3 Mailto fallback (handled by the bounce worker)
 
-The `mailto:unsubscribe+<id>@<domain>` option is for clients that prefer email
+The `mailto:unsubscribe+<id>.<token>@<domain>` option is for clients that prefer email
 unsubscribe. **No extra Email Routing rule is required** because the bounce
 worker is already the **catch-all** inbound route (per the deploy runbook).
 
 `workers/bounce/src/index.ts → email()`:
 
-1. Lowercases the recipient and matches `unsubscribe\+(\d+)@`.
-2. If matched:
+1. Lowercases the recipient and parses `unsubscribe+<id>.<token>@`
+   (`parseMailtoUnsubscribe()` in `shared/tracking.ts`). `<token>` is the
+   subscriber's unsubscribe token (the UUID without hyphens, lowercased).
+2. Looks up the subscriber and compares the token in constant time. A missing,
+   malformed or wrong token — including the legacy token-less
+   `unsubscribe+<id>@` form — is ignored and logged as
+   `mailto_unsubscribe_rejected`.
+3. If the token matches:
 
    ```sql
    UPDATE subscribers SET status='unsubscribed', unsubscribed_at=datetime('now')
    WHERE id = ? AND status='active'
    ```
 
-3. If a row changed, inserts an `unsubscribe` event.
+4. If a row changed, inserts an `unsubscribe` event and logs
+   `mailto_unsubscribe`.
 
-Here the sender's own mail provider is the proof of intent — a mailto carries no
-token — which matches standard "unsubscribe by email" behaviour.
+The token means a mailto can't be forged for another subscriber by guessing
+their (sequential) ID. Emails sent before this change carry the legacy
+token-less address, which no longer unsubscribes; their HTTPS one-click and
+footer links keep working.
 
 ### 3.4 Footer link (guaranteed)
 
@@ -355,7 +364,7 @@ just won't receive mail until reactivated by one of the above.
 | Public signup (step 1) | `POST /subscribe/<slug>` | tracker | `status=active`, `confirm_token=set` (pending) | **No** (gated) |
 | Public confirm (step 2) | `GET /verify/<id>` | tracker | `verified=1`, `confirm_token=NULL`, reactivated | Yes |
 | Unsubscribe (one-click/link) | `GET/POST /u/<id>?t=` | tracker | `status=unsubscribed` | No |
-| Unsubscribe (mailto) | inbound `unsubscribe+<id>@` | bounce | `status=unsubscribed` | No |
+| Unsubscribe (mailto) | inbound `unsubscribe+<id>.<token>@` | bounce | `status=unsubscribed` | No |
 | Remove (console) | `DELETE …/subscribers/<id>` | admin | `status=unsubscribed` (soft) | No |
 | Bounce/complaint | inbound bounce / FBL | bounce | `status=bounced`/`complained` | No |
 
