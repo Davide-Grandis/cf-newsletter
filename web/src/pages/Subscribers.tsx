@@ -7,7 +7,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PAGE_SIZE, Pagination } from '../components/Pagination';
 import { fmtDate } from '../utils/date';
 
-type SortKey = 'email' | 'full_name' | 'status' | 'verified' | 'tracking_consent' | 'bounce_count' | 'subscribed_at';
+type SortKey = 'email' | 'first_name' | 'last_name' | 'status' | 'verified' | 'tracking_consent' | 'bounce_count' | 'subscribed_at';
 type ImportResult = { added: number; duplicated: number; rejected: number };
 
 export default function Subscribers({
@@ -259,7 +259,7 @@ export default function Subscribers({
         <input
           value={q}
           onChange={(e) => { setQ(e.target.value); setPage(0); }}
-          placeholder="Search email or name"
+          placeholder="Search email, first name or last name"
           className={inputCls + ' flex-1 min-w-[16rem]'}
         />
       </div>
@@ -268,21 +268,23 @@ export default function Subscribers({
         <table className="w-full table-fixed text-sm">
           <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
             <tr>
-              <Th label="Email" title="Subscriber's email address (unique per newsletter)." sortKey="email" sort={sort} onSort={toggleSort} className="w-[22%]" />
-              <Th label="Name" title="Subscriber's full name: first name (required) and last name (optional)." sortKey="full_name" sort={sort} onSort={toggleSort} className="w-[19%]" />
+              <Th label="Email" title="Subscriber's email address (unique per newsletter)." sortKey="email" sort={sort} onSort={toggleSort} className="w-[20%]" />
+              <Th label="First name" title="Subscriber's first name (required)." sortKey="first_name" sort={sort} onSort={toggleSort} className="w-[12%]" />
+              <Th label="Last name" title="Subscriber's last name (optional)." sortKey="last_name" sort={sort} onSort={toggleSort} className="w-[12%]" />
               <Th label="Status" title="Delivery state: active subscribers receive sends; unsubscribed, bounced and complained are excluded." sortKey="status" sort={sort} onSort={toggleSort} className="w-[9%]" />
               <Th label="Verified" title="Whether the email address has been confirmed. Defaults to False for new subscribers." sortKey="verified" sort={sort} onSort={toggleSort} className="w-[8%]" />
               <Th label="Tracking" title="Whether the subscriber consented to open/click tracking. Tracking applies only when it is also enabled in Settings." sortKey="tracking_consent" sort={sort} onSort={toggleSort} className="w-[8%]" />
-              <Th label="Bounces" title="Number of times mail to this address has bounced." sortKey="bounce_count" sort={sort} onSort={toggleSort} align="right" className="w-[8%]" />
-              <Th label="Date subscribed" title="When the subscriber was added to the list." sortKey="subscribed_at" sort={sort} onSort={toggleSort} className="w-[14%] pl-8" />
-              <th className="p-2 w-[12%]" />
+              <Th label="Bounces" title="Number of times mail to this address has bounced." sortKey="bounce_count" sort={sort} onSort={toggleSort} align="right" className="w-[7%]" />
+              <Th label="Date subscribed" title="When the subscriber was added to the list." sortKey="subscribed_at" sort={sort} onSort={toggleSort} className="w-[13%] pl-8" />
+              <th className="p-2 w-[11%]" />
             </tr>
           </thead>
           <tbody>
             {rows.map((s) => (
               <tr key={s.id} className="border-t border-slate-100 dark:border-slate-800">
                 <td className="p-2 font-mono text-xs truncate">{s.email}</td>
-                <td className="p-2 truncate">{s.full_name ?? '—'}</td>
+                <td className="p-2 truncate">{s.first_name ?? '—'}</td>
+                <td className="p-2 truncate">{s.last_name ?? '—'}</td>
                 <td className="p-2">
                   <StatusPill status={s.status} />
                 </td>
@@ -355,7 +357,7 @@ export default function Subscribers({
               </tr>
             ))}
             {list.data && rows.length === 0 && (
-              <tr><td colSpan={8} className="p-4 text-center text-slate-500 dark:text-slate-400">No results.</td></tr>
+              <tr><td colSpan={9} className="p-4 text-center text-slate-500 dark:text-slate-400">No results.</td></tr>
             )}
           </tbody>
         </table>
