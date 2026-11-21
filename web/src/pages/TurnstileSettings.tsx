@@ -57,7 +57,7 @@ export default function TurnstileSettings() {
   if (status.isLoading) return <p className="text-sm text-slate-500">Checking Turnstile configuration...</p>;
   if (status.error) return <p role="alert" className="text-sm text-red-600">{status.error.message}</p>;
   const data = status.data!;
-  const enabled = data.enabled && data.ready;
+  const enabled = data.enabled && data.ready && !data.checkError;
 
   function cancelSetup() {
     setConfiguring(false);
@@ -70,8 +70,7 @@ export default function TurnstileSettings() {
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
         <h2 className="text-base font-medium">Public signup bot protection</h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          New installations configure Turnstile automatically. Use this page to enable it on an existing installation, complete a failed setup, or remove it.
-          Public signup is enabled separately on each newsletter&apos;s Signup tab.
+          Enable Turnstile protection for the subscribe page.
         </p>
       </div>
       <div className="space-y-4 p-4">
@@ -79,7 +78,7 @@ export default function TurnstileSettings() {
           <div>
             <h3 id="turnstile-label" className="text-sm font-medium">Turnstile bot protection</h3>
             <p id="turnstile-status" className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {enabled ? 'Enabled. Public signup is protected from bots.' : data.enabled ? 'Setup incomplete. Complete setup to restore protected signup.' : 'Disabled. Public signup is available without bot protection.'}
+              {enabled ? 'Enabled. Public signup requires Turnstile verification.' : data.enabled ? 'Disabled. Turnstile verification failed; enable it again to retry setup.' : 'Disabled. Public signup is available without bot protection.'}
             </p>
           </div>
           <button
@@ -102,9 +101,9 @@ export default function TurnstileSettings() {
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
           </button>
         </div>
-        {data.enabled && !data.ready && (
+        {data.enabled && !enabled && !data.checkError && (
           <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">
-            Protection is enabled but the tracker keys are not verified. Complete setup to restore protected signup, or remove Turnstile.
+            The tracker keys could not be verified. Protected signup may be unavailable until Turnstile is successfully configured again.
           </p>
         )}
         {data.checkError && <p className="text-xs text-amber-700 dark:text-amber-400">{data.checkError}</p>}
@@ -114,7 +113,7 @@ export default function TurnstileSettings() {
             onSubmit={(event) => { event.preventDefault(); void change(true); }}
           >
             <p className="text-sm text-slate-600 dark:text-slate-300">
-              {data.siteKey ? 'Complete setup using the same widget, or remove it before choosing another one. In ' : 'Create a managed widget in '}
+              {data.siteKey ? 'Use the previously configured widget in ' : 'Create a managed widget in '}
               <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noreferrer" className="text-blue-600 underline dark:text-blue-400">Cloudflare Turnstile</a>,
               allow exactly {configuredHostname ? <code className="break-all font-semibold">{data.hostname}</code> : 'your tracking hostname (configure it in Tracking & bounce first)'}.
               Use only the hostname, without a scheme, port, or path, not the console or embedding website hostname.
@@ -151,12 +150,6 @@ export default function TurnstileSettings() {
               </button>
             </div>
           </form>
-        )}
-        {!enabled && (data.enabled || data.siteKey) && (
-          <button type="button" disabled={saving} onClick={() => setConfirmDelete(true)}
-            className="rounded border border-red-300 px-3 py-2 text-sm text-red-700 disabled:opacity-40 dark:border-red-800 dark:text-red-400">
-            Remove incomplete configuration
-          </button>
         )}
         {saving && <p role="status" className="text-sm text-slate-500">Waiting for Cloudflare to verify the configuration...</p>}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
