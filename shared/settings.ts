@@ -202,3 +202,8 @@ export async function loadSettings<T extends object>(
   }
   return merged as T;
 }
+
+/** The global open/click tracking switch; anything but an explicit 'false' counts as on, default off. */
+export function trackingEnabledGlobally(env: object): boolean {
+  return ((env as { TRACKING_ENABLED?: string }).TRACKING_ENABLED ?? 'false') !== 'false';
+}

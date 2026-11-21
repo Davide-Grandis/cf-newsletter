@@ -33,6 +33,7 @@ export interface CampaignRow {
   mail_merge_incoming: number;
   mail_merge_html: string | null;
   mail_merge_text: string | null;
+  newsletter_tracking_enabled: number | null;
 }
 
 export interface AttachmentRow {

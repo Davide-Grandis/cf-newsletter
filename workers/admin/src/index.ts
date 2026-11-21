@@ -31,6 +31,7 @@ import {
   readStoredSettings,
   resolveTrackingBaseUrl,
   SETTING_KEYS,
+  trackingEnabledGlobally,
   SETTINGS_DEFAULTS,
   isSettingKey,
 } from '../../../shared/settings';
@@ -162,6 +163,7 @@ export default {
         // Authenticated via Access but no role yet (system already bootstrapped).
         no_access: Boolean(email) && !auth,
         allow_admin_newsletter_crud: cfg.ALLOW_ADMIN_NEWSLETTER_CRUD === 'true',
+        tracking_enabled: trackingEnabledGlobally(cfg),
         // Non-sensitive deployment values the SPA needs even for admins (who
         // cannot read the super_admin-only /api/settings): the sending domain
         // and the default sender, used by the newsletter create/edit forms.
@@ -1368,7 +1370,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         const row = await env.DB
           .prepare(
             `SELECT n.id, n.name, n.inbound_address, n.from_address, n.reply_to_address, n.reply_to_author, n.footer_html, n.footer_text, ` +
-              `n.mail_merge_enabled, n.mail_merge_incoming, n.mail_merge_html, n.mail_merge_text, n.slug, n.allow_public_signup, n.enabled, n.created_at, ` +
+              `n.mail_merge_enabled, n.mail_merge_incoming, n.mail_merge_html, n.mail_merge_text, n.slug, n.allow_public_signup, n.tracking_enabled, n.enabled, n.created_at, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id) AS subscriber_count, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id AND s.status='active') AS active_count, ` +
               `(SELECT COUNT(*) FROM authors a WHERE a.newsletter_id = n.id) AS author_count, ` +
@@ -1396,6 +1398,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           mail_merge_text?: unknown;
           slug?: string;
           allow_public_signup?: boolean;
+          tracking_enabled?: unknown;
         }>();
         const sets: string[] = [];
         const binds: unknown[] = [];
@@ -1532,6 +1535,16 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         if (typeof body.allow_public_signup === 'boolean') {
           sets.push('allow_public_signup = ?');
           binds.push(body.allow_public_signup ? 1 : 0);
+        }
+        if ('tracking_enabled' in body) {
+          if (typeof body.tracking_enabled !== 'boolean') {
+            return Response.json({ error: 'tracking_enabled must be a boolean' }, { status: 400 });
+          }
+          if (body.tracking_enabled && !trackingEnabledGlobally(env)) {
+            return Response.json({ error: 'Tracking is disabled in Settings; enable it there first.' }, { status: 409 });
+          }
+          sets.push('tracking_enabled = ?');
+          binds.push(body.tracking_enabled ? 1 : 0);
         }
         if (sets.length === 0) return Response.json({ error: 'no fields' }, { status: 400 });
         // Capture the current address + enabled state before the update so we

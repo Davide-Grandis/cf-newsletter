@@ -1,7 +1,7 @@
 import { EmailMessage } from 'cloudflare:email';
 import { verifyHmac } from '../../../shared/tracking';
 import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
-import { loadSettings, resolveTrackingBaseUrl } from '../../../shared/settings';
+import { loadSettings, resolveTrackingBaseUrl, trackingEnabledGlobally } from '../../../shared/settings';
 import { writeLog } from '../../../shared/db';
 import { fullName } from '../../../shared/mail-merge';
 
@@ -169,6 +169,7 @@ interface NewsletterRow {
   name: string;
   from_address: string | null;
   allow_public_signup: number;
+  tracking_enabled: number;
   enabled: number;
 }
 
@@ -179,7 +180,7 @@ async function findSignupNewsletter(env: Env, slug: string): Promise<NewsletterR
   if (!slug) return null;
   const row = await env.DB
     .prepare(
-      'SELECT id, name, from_address, allow_public_signup, enabled FROM newsletters WHERE slug = ?',
+      'SELECT id, name, from_address, allow_public_signup, tracking_enabled, enabled FROM newsletters WHERE slug = ?',
     )
     .bind(slug)
     .first<NewsletterRow>();
@@ -214,7 +215,7 @@ async function handleSubscribe(
   }
 
   const effectiveSiteKey = turnstileEnabled ? siteKey : '';
-  const askConsent = (cfg.TRACKING_ENABLED ?? 'false') !== 'false';
+  const askConsent = trackingEnabledGlobally(cfg) && nl.tracking_enabled === 1;
   const form = (error: string | null) => subscribeForm(slug, nl.name, effectiveSiteKey, askConsent, error);
 
   if (req.method === 'GET') {

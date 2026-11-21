@@ -30,7 +30,7 @@ import {
   type WarmupState,
 } from '../../../shared/warmup';
 import { fetchAccountSendingQuota } from '../../../shared/quota';
-import { loadSettings, resolveTrackingBaseUrl } from '../../../shared/settings';
+import { loadSettings, resolveTrackingBaseUrl, trackingEnabledGlobally } from '../../../shared/settings';
 
 export interface Env {
   DB: D1Database;
@@ -201,9 +201,9 @@ export default {
           continue;
         }
 
-        const consents = env.TRACKING_ENABLED === 'false'
-          ? new Set<number>()
-          : await getTrackingConsents(env.DB, recipients.map((r) => r.subscriberId));
+        const consents = trackingEnabledGlobally(env) && campaign.newsletter_tracking_enabled === 1
+          ? await getTrackingConsents(env.DB, recipients.map((r) => r.subscriberId))
+          : new Set<number>();
         let sentInBatch = 0;
         let failedInBatch = 0;
         for (const r of recipients) {
@@ -347,7 +347,7 @@ async function renderRecipientHtml(
   // Open/click tracking is optional. When disabled, links are left pointing at
   // their original destinations and no open pixel is added. Link-mode download
   // links above are unaffected — they deliver the attachments themselves.
-  if (env.TRACKING_ENABLED === 'false' || !trackingConsent) return html;
+  if (!trackingConsent) return html;
   return await instrumentHtml(html, env.TRACKING_BASE_URL, env.LINK_SIGNING_KEY, campaign.id, subscriberId);
 }
 

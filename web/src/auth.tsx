@@ -27,6 +27,7 @@ export interface Identity {
   // Global permission toggle (mirrored from settings). Managing admins is no
   // longer global — it is governed per-admin by the read-only/edit capability.
   allow_admin_newsletter_crud: boolean;
+  tracking_enabled: boolean;
   // Non-sensitive deployment values used by newsletter forms.
   base_domain: string;
   from_address: string;

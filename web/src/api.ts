@@ -83,6 +83,7 @@ export interface Newsletter {
   mail_merge_incoming?: 0 | 1;
   mail_merge_html?: string | null;
   mail_merge_text?: string | null;
+  tracking_enabled?: 0 | 1;
   // Optional per-newsletter footer. null/empty => inherits the global
   // DEFAULT_FOOTER_HTML / DEFAULT_FOOTER_TEXT settings. Only returned by the
   // single-newsletter GET (not the list).

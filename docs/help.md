@@ -90,8 +90,9 @@ Configure it on the newsletter's **Signup** tab:
 How it works:
 
 1. A visitor enters their email, first name (required) and last name
-   (optional). When tracking is enabled in Settings, the form also shows an
-   unticked **Allow open and click tracking** checkbox. When Turnstile
+   (optional). When tracking is on both in Settings and on the newsletter's
+   **Tracking** tab, the form also shows an unticked **Allow open and click
+   tracking** checkbox. When Turnstile
    protection is enabled, they also pass the **Cloudflare Turnstile** bot check.
 2. The pipeline records a *pending* subscriber and emails them a confirmation
    link. The response is always the same neutral "check your inbox" message, so
@@ -218,9 +219,13 @@ controls only the first two transformations and starts off by default. When
 - Links are sent **unmodified** (recipients see and click your real URLs), and
 - the open pixel is **omitted**.
 
-When **on**, tracking still applies only to subscribers whose **Tracking**
-consent is True (the Subscribers tab shows it). Everyone else receives
-unmodified links and no pixel. Consent is read when each email is sent.
+When **on**, it is a master switch: tracking must also be enabled on each
+newsletter's **Tracking** tab (off by default; it can't be turned on while the
+global toggle is off), and even then applies only to subscribers whose
+**Tracking** consent is True (the Subscribers tab shows it). Everyone else
+receives unmodified links and no pixel. Consent is read when each email is
+sent. Turning the global toggle off stops tracking everywhere; each
+newsletter's own setting is kept for when it is turned back on.
 
 With tracking off, **opens and clicks are no longer recorded** and the Analytics page
 shows none for sends made while tracking is off. Large-attachment **download

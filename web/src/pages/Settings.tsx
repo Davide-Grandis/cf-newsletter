@@ -180,7 +180,7 @@ const TABS: Tab[] = [
     description:
       'Tracking transforms outgoing HTML. Disable to send the emails unmodified, no tracking analytics will be available.',
     fields: [
-      { key: 'TRACKING_ENABLED', label: 'Open & click tracking', help: 'When on, links are rewritten through the tracker and an open pixel is added.', type: 'boolean', hideKey: true, hideOverride: true },
+      { key: 'TRACKING_ENABLED', label: 'Open & click tracking', help: 'Master switch. When on, tracking can be enabled per newsletter (Tracking tab) and applies only to subscribers who consented.', type: 'boolean', hideKey: true, hideOverride: true },
       { key: 'TRACKING_BASE_URL', label: 'Tracking base URL', help: 'Base URL of the tracker worker for opens, clicks, unsubscribe and downloads.', hideKey: true, hideSource: true, splitUrl: true, placeholder: 'track' },
     ],
   },

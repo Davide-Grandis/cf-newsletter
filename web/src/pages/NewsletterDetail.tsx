@@ -9,8 +9,9 @@ import Authors from './Authors';
 import NewsletterAdmins from './NewsletterAdmins';
 import { LocalPartInput, localPart } from './Newsletters';
 import { MailMergeEditor, type MailMergeUpdate } from '../components/MailMergeEditor';
+import { TrackingEditor } from '../components/TrackingEditor';
 
-type Tab = 'subscribers' | 'authors' | 'admins' | 'mail-merge' | 'footer' | 'signup';
+type Tab = 'subscribers' | 'authors' | 'admins' | 'mail-merge' | 'footer' | 'signup' | 'tracking';
 
 export default function NewsletterDetail() {
   const { id = '' } = useParams();
@@ -50,7 +51,7 @@ export default function NewsletterDetail() {
     mutationFn: (
       body: Partial<
         Pick<Newsletter, 'name' | 'inbound_address' | 'from_address' | 'reply_to_address' | 'footer_html' | 'footer_text' | 'slug'>
-      > & Partial<MailMergeUpdate> & { enabled?: boolean; allow_public_signup?: boolean; reply_to_author?: boolean },
+      > & Partial<MailMergeUpdate> & { enabled?: boolean; allow_public_signup?: boolean; reply_to_author?: boolean; tracking_enabled?: boolean },
     ) => api<{ routing_warning?: string }>(`/api/newsletters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: async (res) => {
       setWarn(res.routing_warning ?? null);
@@ -203,6 +204,9 @@ export default function NewsletterDetail() {
           <TabButton active={tab === 'signup'} onClick={() => setTab('signup')}>
             Signup
           </TabButton>
+          <TabButton active={tab === 'tracking'} onClick={() => setTab('tracking')}>
+            Tracking
+          </TabButton>
         </div>
         {tab === 'subscribers' ? (
           <Subscribers newsletterId={id} canEdit={canEdit} />
@@ -227,6 +231,15 @@ export default function NewsletterDetail() {
             saving={patch.isPending}
             subscribeBase={me.data?.tracking_base_url ?? ''}
             baseDomain={me.data?.base_domain ?? ''}
+          />
+        ) : tab === 'tracking' ? (
+          <TrackingEditor
+            n={n}
+            canEdit={canEdit}
+            globalEnabled={me.data?.tracking_enabled ?? false}
+            isSuperAdmin={me.data?.role === 'super_admin'}
+            onSave={(body) => patch.mutateAsync(body)}
+            saving={patch.isPending}
           />
         ) : (
           <NewsletterAdmins newsletterId={id} canManage={canEdit} />

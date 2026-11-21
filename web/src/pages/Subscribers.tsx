@@ -273,7 +273,7 @@ export default function Subscribers({
               <Th label="Last name" title="Subscriber's last name (optional)." sortKey="last_name" sort={sort} onSort={toggleSort} className="w-[12%]" />
               <Th label="Status" title="Delivery state: active subscribers receive sends; unsubscribed, bounced and complained are excluded." sortKey="status" sort={sort} onSort={toggleSort} className="w-[9%]" />
               <Th label="Verified" title="Whether the email address has been confirmed. Defaults to False for new subscribers." sortKey="verified" sort={sort} onSort={toggleSort} className="w-[8%]" />
-              <Th label="Tracking" title="Whether the subscriber consented to open/click tracking. Tracking applies only when it is also enabled in Settings." sortKey="tracking_consent" sort={sort} onSort={toggleSort} className="w-[8%]" />
+              <Th label="Tracking" title="Whether the subscriber consented to open/click tracking. Tracking applies only when it is also enabled in Settings and on this newsletter's Tracking tab." sortKey="tracking_consent" sort={sort} onSort={toggleSort} className="w-[8%]" />
               <Th label="Bounces" title="Number of times mail to this address has bounced." sortKey="bounce_count" sort={sort} onSort={toggleSort} align="right" className="w-[7%]" />
               <Th label="Date subscribed" title="When the subscriber was added to the list." sortKey="subscribed_at" sort={sort} onSort={toggleSort} className="w-[13%] pl-8" />
               <th className="p-2 w-[11%]" />

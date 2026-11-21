@@ -40,5 +40,11 @@
     "file": "0007_subscriber_names_tracking_consent.sql",
     "description": "Store subscriber first and last names, derive the full name, and record tracking consent",
     "checkSql": "SELECT CASE WHEN (SELECT COUNT(*) FROM pragma_table_xinfo('subscribers') WHERE name IN ('first_name', 'last_name', 'full_name', 'tracking_consent', 'tracking_consent_at')) = 5 THEN 1 ELSE 0 END AS present"
+  },
+  {
+    "id": "0008_newsletter_tracking",
+    "file": "0008_newsletter_tracking.sql",
+    "description": "Enable open and click tracking per newsletter",
+    "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('newsletters') WHERE name = 'tracking_enabled'"
   }
 ]

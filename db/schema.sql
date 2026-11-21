@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS newsletters (
   slug            TEXT,
   -- Per-newsletter switch: the public subscribe page only works when this is 1.
   allow_public_signup INTEGER NOT NULL DEFAULT 0,
+  tracking_enabled INTEGER NOT NULL DEFAULT 0 CHECK (tracking_enabled IN (0,1)),
   enabled         INTEGER NOT NULL DEFAULT 1,
   created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );

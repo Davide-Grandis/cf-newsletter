@@ -167,7 +167,8 @@ All served by the **tracker worker** (`workers/tracker/src/index.ts`) at
    unavailable"**.
 4. Otherwise renders a branded, mobile-friendly form (`subscribeForm()`): email,
    first name (required), last name (optional), an unticked tracking-consent
-   checkbox when `TRACKING_ENABLED` is on, and—when enabled—the Cloudflare
+   checkbox when `TRACKING_ENABLED` and the newsletter's `tracking_enabled` are
+   both on, and—when enabled—the Cloudflare
    Turnstile widget. Light/dark
    via CSS.
 
