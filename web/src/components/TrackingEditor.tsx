@@ -1,19 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import type { Newsletter } from '../api';
 
 export function TrackingEditor({
   n,
   canEdit,
   globalEnabled,
-  isSuperAdmin,
   onSave,
   saving,
 }: {
   n: Newsletter;
   canEdit: boolean;
   globalEnabled: boolean;
-  isSuperAdmin: boolean;
   onSave: (body: { tracking_enabled: boolean }) => Promise<unknown>;
   saving: boolean;
 }) {
@@ -66,10 +63,7 @@ export function TrackingEditor({
 
       {!globalEnabled && (
         <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/30 dark:text-amber-300">
-          Tracking is disabled globally, so it can&apos;t be enabled for this newsletter.{' '}
-          {isSuperAdmin
-            ? <>Turn on <Link to="/settings?tab=tracking" className="underline">Settings → Tracking &amp; bounce</Link> first.</>
-            : 'Ask a super admin to turn it on in Settings first.'}
+          Tracking is disabled globally, so it can&apos;t be enabled for this newsletter.
         </p>
       )}
 

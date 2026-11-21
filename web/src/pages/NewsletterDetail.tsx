@@ -237,7 +237,6 @@ export default function NewsletterDetail() {
             n={n}
             canEdit={canEdit}
             globalEnabled={me.data?.tracking_enabled ?? false}
-            isSuperAdmin={me.data?.role === 'super_admin'}
             onSave={(body) => patch.mutateAsync(body)}
             saving={patch.isPending}
           />
