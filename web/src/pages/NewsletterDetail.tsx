@@ -703,7 +703,7 @@ function FooterEditor({
             <span>
               <span className="block font-medium text-slate-900 dark:text-slate-100">Footer is included in the incoming email</span>
               <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                Write the footer in the incoming email&apos;s HTML and/or plain-text body using {tokens}. Its formatting is retained.
+                Write the footer in the incoming email&apos;s HTML and/or plain-text body using the three variables above. Its formatting is retained.
               </span>
             </span>
           </label>
