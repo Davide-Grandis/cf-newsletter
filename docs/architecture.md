@@ -131,7 +131,7 @@ wrangler r2 object put cf-newsletter-admin/header.png \
 - `await env.SEND_EMAIL.send(new EmailMessage(from, to, raw))`.
 - On success → update `sends`, increment `campaigns.sent_count`.
 - On error → log to `sends`; `msg.ack()` for permanent failures, `msg.retry()` for transient; exhausted retries flow to DLQ.
-- Bindings: `DB`, `ARCHIVE`, `SEND_EMAIL`, vars `FROM_ADDRESS`, `TRACKING_BASE_URL`, `BASE_DOMAIN`.
+- Bindings: `DB`, `ARCHIVE`, `SEND_EMAIL`, settings `TRACKING_BASE_URL`, `BASE_DOMAIN` (default sender `newsletter@<BASE_DOMAIN>`).
 
 ### `tracker-worker` (HTTP Worker)
 

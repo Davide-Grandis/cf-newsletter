@@ -266,7 +266,7 @@ function SetupRequiredModal({
           <ul className="text-sm text-slate-600 dark:text-slate-300 list-disc pl-5 space-y-1">
             {missingAccess && (
               <li>
-                <span className="font-medium">Cloudflare Access login</span> (Account ID and Emails
+                <span className="font-medium">Cloudflare Access login</span> (account and Emails
                 list ID) — without it new console users are not synced to the Access login list.
               </li>
             )}
@@ -278,7 +278,8 @@ function SetupRequiredModal({
             )}
           </ul>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            Add them now on the Settings page, or close and log out.
+            The Emails list can be set on the Settings page. The account and sending domain are
+            recorded by the installer; re-run it if they are missing.
           </p>
         </div>
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-5 py-4 border-t border-slate-200 dark:border-slate-700">

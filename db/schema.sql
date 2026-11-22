@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS newsletters (
   name            TEXT NOT NULL,
   inbound_address TEXT NOT NULL UNIQUE COLLATE NOCASE,
   -- Optional per-newsletter sender (the outgoing `From:`). NULL falls back to
-  -- the global FROM_ADDRESS setting. Must be on the configured sending domain.
+  -- newsletter@<BASE_DOMAIN>. Must be on the configured sending domain.
   from_address    TEXT,
   reply_to_address TEXT,
   reply_to_author INTEGER NOT NULL DEFAULT 0 CHECK (reply_to_author IN (0,1)),

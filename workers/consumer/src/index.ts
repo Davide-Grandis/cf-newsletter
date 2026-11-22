@@ -30,14 +30,13 @@ import {
   type WarmupState,
 } from '../../../shared/warmup';
 import { fetchAccountSendingQuota } from '../../../shared/quota';
-import { loadSettings, resolveTrackingBaseUrl, trackingEnabledGlobally } from '../../../shared/settings';
+import { defaultSender, loadSettings, resolveTrackingBaseUrl, trackingEnabledGlobally } from '../../../shared/settings';
 
 export interface Env {
   DB: D1Database;
   ARCHIVE: R2Bucket;
   SEND_EMAIL: SendEmail;
   QUEUE: Queue<QueueMessage>;
-  FROM_ADDRESS: string;
   TRACKING_BASE_URL: string;
   TRACKING_ENABLED: string;
   // Global default email footer (used when a newsletter has no footer of its
@@ -238,7 +237,7 @@ export default {
             }
             const messageId = `${crypto.randomUUID()}@${env.BASE_DOMAIN}`;
             // Per-newsletter sender if set, otherwise the global default.
-            const fromHeader = campaign.from_address || env.FROM_ADDRESS;
+            const fromHeader = campaign.from_address || defaultSender(env.BASE_DOMAIN);
             const fromAddr = extractAddr(fromHeader);
 
             const raw = buildEmail({

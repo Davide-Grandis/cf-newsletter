@@ -20,7 +20,7 @@ export interface CampaignRow {
   status: string;
   link_mode: number;
   // Per-newsletter sender resolved via the campaign's newsletter. NULL means
-  // fall back to the global FROM_ADDRESS setting.
+  // fall back to newsletter@<BASE_DOMAIN>.
   from_address: string | null;
   reply_to_address: string | null;
   // The campaign's newsletter, used to resolve and personalise the footer.

@@ -17,7 +17,6 @@
 export const SETTING_KEYS = [
   // -- Deployment & routing (group B) --
   'EMAIL_ROUTING_ZONE_ID',
-  'INGEST_WORKER_NAME',
   'BASE_DOMAIN',
   'DATA_LOCALITY',
   // -- Access / user management --
@@ -35,7 +34,6 @@ export const SETTING_KEYS = [
   'ALLOW_ADMIN_NEWSLETTER_CRUD',
   'BRANDING_TEXT_COLOR',
   // -- Sending identity --
-  'FROM_ADDRESS',
   'TRACKING_BASE_URL',
   // Global default email footer (HTML + plain text). A newsletter's own footer
   // overrides these; an empty newsletter footer inherits them. Supports the
@@ -99,18 +97,16 @@ export const SETTINGS_DEFAULTS: Record<SettingKey, string> = {
   // No built-in default: the Email Routing zone is deployment-specific and is
   // configured exclusively via the D1 `settings` table (Settings page).
   EMAIL_ROUTING_ZONE_ID: '',
-  INGEST_WORKER_NAME: 'cf-newsletter-ingest',
   // No built-in default: the sending domain is deployment-specific and lives
-  // only in the D1 `settings` table. Saving it auto-resolves EMAIL_ROUTING_ZONE_ID.
+  // only in the D1 `settings` table, written by the installer.
   BASE_DOMAIN: '',
   DATA_LOCALITY: '',
-  // Empty until the Zero Trust Emails list is provisioned; set from the Settings
-  // page (Access tab) so console user management can sync list membership.
+  // Written by the installer. The list ID stays editable from the Settings
+  // page (Deployment details tab) in case the Zero Trust list is recreated.
   ACCESS_ACCOUNT_ID: '',
   ACCESS_LIST_ID: '',
   ALLOW_ADMIN_NEWSLETTER_CRUD: 'false',
   BRANDING_TEXT_COLOR: '',
-  FROM_ADDRESS: 'console@yourdomain.com',
   TRACKING_BASE_URL: 'https://track.yourdomain.com',
   // Global default footer. Newsletters with an empty footer inherit these.
   // {{unsubscribe_url}} is always honoured; if a footer omits it the consumer
@@ -148,6 +144,27 @@ export const SETTINGS_DEFAULTS: Record<SettingKey, string> = {
   WARMUP_DAYS: '30',
   DAILY_CAP_FALLBACK: '1000',
 };
+
+// Deployment values recorded by the installer. The settings API refuses to
+// change them: they must match the API tokens, DNS/DKIM setup, Email Routing
+// rules and links already sent to subscribers.
+export const INSTALLER_LOCKED_SETTINGS: ReadonlySet<string> = new Set<SettingKey>([
+  'BASE_DOMAIN',
+  'EMAIL_ROUTING_ZONE_ID',
+  'ACCESS_ACCOUNT_ID',
+  'DATA_LOCALITY',
+  'TRACKING_BASE_URL',
+]);
+
+/** From address for newsletters without a per-newsletter sender. */
+export function defaultSender(baseDomain: string): string {
+  return `newsletter@${baseDomain}`;
+}
+
+/** From address for console notifications (e.g. user added/removed). */
+export function consoleSender(baseDomain: string): string {
+  return `cf-newsletter-console@${baseDomain}`;
+}
 
 /**
  * Returns the effective tracker base URL.

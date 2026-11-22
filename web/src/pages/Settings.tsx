@@ -6,7 +6,6 @@ import { useIdentity, type Identity } from '../auth';
 import SuperAdmins from './SuperAdmins';
 import Updates from './Updates';
 import TurnstileSettings from './TurnstileSettings';
-import { localPart, LocalPartInput } from './Newsletters';
 
 type FieldType = 'text' | 'number' | 'textarea' | 'boolean';
 
@@ -21,9 +20,12 @@ interface FieldMeta {
   // Render the source badge below the input instead of beside the label.
   sourceBelow?: boolean;
   // Populate the field from a dynamic option source (a pick-list) rather than
-  // free text. 'sending-domains' = the account's Cloudflare zones (Email
-  // Routing-enabled only); 'workers' = the account's Worker scripts.
-  optionsFrom?: 'sending-domains' | 'workers';
+  // free text. 'access-lists' = the account's Zero Trust Emails lists (shown
+  // by name, stored by ID).
+  optionsFrom?: 'access-lists';
+  // Display a value resolved from the stored one instead of the raw value.
+  // 'account-name' = the Cloudflare account name (falls back to the ID).
+  displayFrom?: 'account-name';
   // Hide the raw setting key shown under the help text (user-facing settings
   // where the internal variable name is just noise).
   hideKey?: boolean;
@@ -34,12 +36,6 @@ interface FieldMeta {
   // Display-only: hides Edit and Reset buttons so the value cannot be changed
   // from the UI. Useful for limits derived from platform constraints.
   readOnly?: boolean;
-  // Show as [local-part][@domain] split input; domain is taken from the BASE_DOMAIN setting.
-  splitAt?: boolean;
-  // Show as [https://][subdomain][.domain] split input; domain is taken from BASE_DOMAIN.
-  splitUrl?: boolean;
-  // Placeholder shown inside the variable part of a splitUrl input.
-  placeholder?: string;
   // Show DEFAULT badge when source is default, but hide the OVERRIDDEN badge, override text, and Reset.
   hideOverride?: boolean;
   // When set to another setting key, the Edit button is disabled when that key's effective value is 'false'.
@@ -48,7 +44,7 @@ interface FieldMeta {
 
 interface Section {
   title: string;
-  description: string;
+  description?: string;
   // Optional longer-form guidance rendered as a callout above the fields.
   // Newlines are preserved, so it can hold multi-step instructions.
   note?: string;
@@ -67,32 +63,15 @@ interface Tab {
 // Sections are grouped into a small number of tabs to keep the page scannable.
 const TABS: Tab[] = [
   {
-    id: 'login',
-    label: 'Account details',
+    id: 'deployment',
+    label: 'Deployment details',
     sections: [
   {
-    title: 'Console access',
-    description:
-      'Access to this application is enforced by Cloudflare Access at the edge.',
-    note:
-      'Required one-time setup in the Zero Trust dashboard (the worker never creates these; it only edits list membership):\n\n' +
-      '1. Emails list — under My Team \u2192 Lists, create a list of type "Emails". The account that owns it is the Account ID below; the list\u2019s own ID is the List ID below. Do not edit its members by hand — the Users page drives them.\n\n' +
-      '2. Access application — a self-hosted application protecting this console\u2019s hostname.\n\n' +
-      '3. Access policy — on that application, a single policy with action Allow and exactly one Include rule of type "Emails list" pointing at the list above. No other rules are needed; membership is controlled entirely from the Users page.\n\n' +
-      'API token — stored as the Worker secret CF_ZT_API_TOKEN (not shown here). Least privilege: Account \u2192 Zero Trust \u2192 Edit, restricted to this account only. It must be an account-owned token whose account matches the Account ID below.\n\n' +
-      'The two parameters below are mandatory — please check them with your Cloudflare admin team.',
+    title: 'Deployment',
     fields: [
-      { key: 'ACCESS_ACCOUNT_ID', label: 'Account ID', help: 'Cloudflare account that owns the Zero Trust Emails list (lists are account-scoped). Must match the account the CF_ZT_API_TOKEN secret is scoped to.', hideSource: true, hideKey: true },
-      { key: 'ACCESS_LIST_ID', label: 'Emails list ID', help: 'ID of the Zero Trust "Emails" list referenced by the Access policy. The worker appends/removes member emails as console users are added or removed. Leave empty to disable automatic sync (you then maintain the list by hand).', hideSource: true, hideKey: true },
-    ],
-  },
-  {
-    title: 'Sending identity',
-    description:
-      'The domain and address used for all outgoing emails.',
-    fields: [
-      { key: 'BASE_DOMAIN', label: 'Sending domain', help: 'The Cloudflare domain name for the Email Sending service. It represents the domain for used for sending and receiving emails.', hideKey: true, hideSource: true, optionsFrom: 'sending-domains' },
-      { key: 'FROM_ADDRESS', label: 'Sender address', help: 'The From: address used for outgoing emails (console notifications and newsletters without a per-newsletter sender). Must be a local part on the sending domain above.', hideKey: true, hideSource: true, splitAt: true },
+      { key: 'ACCESS_ACCOUNT_ID', label: 'Cloudflare account', help: 'Account this console is deployed to.', readOnly: true, hideKey: true, hideSource: true, displayFrom: 'account-name' },
+      { key: 'BASE_DOMAIN', label: 'Sending domain', help: 'Domain used for sending and receiving emails.', readOnly: true, hideKey: true, hideSource: true },
+      { key: 'ACCESS_LIST_ID', label: 'Zero Trust Emails list', help: 'List referenced by the Access policy; console users are synced to it. Change it only if the list was recreated.', hideKey: true, hideSource: true, optionsFrom: 'access-lists' },
     ],
   },
     ],
@@ -126,13 +105,6 @@ const TABS: Tab[] = [
     id: 'attachments',
     label: 'Email ingestion',
     sections: [
-  {
-    title: 'Ingest worker',
-    description: 'Worker script that Email Routing rules forward inbound mail to.',
-    fields: [
-      { key: 'INGEST_WORKER_NAME', label: 'Ingest worker name', help: 'Worker script that Email Routing rules forward inbound mail to. Pick from the Workers in this account.', hideKey: true, hideSource: true, optionsFrom: 'workers' },
-    ],
-  },
   {
     title: 'Max message size',
     description: 'Fan-out and message-size guards used by the ingest and consumer workers.',
@@ -181,7 +153,6 @@ const TABS: Tab[] = [
       'Tracking transforms outgoing HTML. Disable to send the emails unmodified, no tracking analytics will be available.',
     fields: [
       { key: 'TRACKING_ENABLED', label: 'Open & click tracking', help: 'Master switch. When on, tracking can be enabled per newsletter (Tracking tab) and applies only to subscribers who consented.', type: 'boolean', hideKey: true, hideOverride: true },
-      { key: 'TRACKING_BASE_URL', label: 'Tracking base URL', help: 'Base URL of the tracker worker for opens, clicks, unsubscribe and downloads.', hideKey: true, hideSource: true, splitUrl: true, placeholder: 'track' },
     ],
   },
   {
@@ -368,7 +339,7 @@ export default function Settings() {
   // Best-effort warning returned after saving the sending domain (e.g. the
   // bounce Email Routing rule could not be created automatically).
   const [saveWarn, setSaveWarn] = useState<string | null>(null);
-  const tab = search.get('tab') ?? 'login';
+  const tab = search.get('tab') ?? 'deployment';
   const setTab = (value: string) => setSearch({ tab: value });
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0]!;
@@ -378,25 +349,28 @@ export default function Settings() {
     queryFn: () => api<{ settings: Setting[] }>('/api/settings'),
   });
 
-  // Account domains (Cloudflare zones) backing the sending-domain pick-list,
-  // each annotated with its Email Routing status when the read token allows it.
-  const domains = useQuery({
-    queryKey: ['sending-domains'],
-    queryFn: () =>
-      api<{
-        items: { name: string; routing: 'enabled' | 'disabled' | 'unknown' }[];
-        error?: string;
-        routing_checkable?: boolean;
-      }>('/api/sending-domains'),
+  // Cloudflare account name shown on the Deployment details tab.
+  const account = useQuery({
+    queryKey: ['account'],
+    queryFn: () => api<{ id: string; name: string | null; error?: string }>('/api/account'),
+    staleTime: 30 * 60_000,
+  });
+
+  // Account Zero Trust Emails lists backing the Access list pick-list.
+  const accessLists = useQuery({
+    queryKey: ['access-lists'],
+    queryFn: () => api<{ items: { id: string; name: string }[]; error?: string }>('/api/access-lists'),
     staleTime: 5 * 60_000,
   });
 
-  // Account Worker scripts backing the ingest-worker pick-list.
-  const workers = useQuery({
-    queryKey: ['account-workers'],
-    queryFn: () => api<{ items: string[]; error?: string }>('/api/workers'),
-    staleTime: 5 * 60_000,
-  });
+  // Pick-list state for an `optionsFrom` field: options as value/label pairs.
+  const accessListPicks = {
+    options: (accessLists.data?.items ?? []).map((l) => ({ value: l.id, label: l.name })),
+    loading: accessLists.isLoading,
+    error: accessLists.data?.error,
+    noun: 'Emails lists',
+    empty: 'No Zero Trust Emails lists found in this account.',
+  };
 
   // Effective values keyed by setting key, from the server.
   const byKey = useMemo(() => {
@@ -406,15 +380,9 @@ export default function Settings() {
   }, [query.data]);
 
   const effective = (key: string) => byKey.get(key)?.value ?? '';
-  const allFields = TABS.flatMap((t) => t.sections.flatMap((s) => s.fields));
-  const editFieldMeta = editKey ? allFields.find((f) => f.key === editKey) : null;
   const changed =
     editKey !== null &&
-    draft !== (editFieldMeta?.splitAt
-      ? localPart(effective(editKey))
-      : editFieldMeta?.splitUrl
-        ? urlSubdomain(effective(editKey), effective('BASE_DOMAIN'))
-        : effective(editKey));
+    draft !== effective(editKey);
 
   const save = useMutation({
     mutationFn: (updates: Record<string, string | null>) =>
@@ -443,12 +411,7 @@ export default function Settings() {
 
   function startEdit(key: string) {
     setEditKey(key);
-    const meta = allFields.find((f) => f.key === key);
-    setDraft(meta?.splitAt
-      ? localPart(effective(key))
-      : meta?.splitUrl
-        ? urlSubdomain(effective(key), effective('BASE_DOMAIN'))
-        : effective(key));
+    setDraft(effective(key));
     setFieldError(null);
     setSavedKey(null);
   }
@@ -462,14 +425,8 @@ export default function Settings() {
     if (!changed) return cancelEdit();
     // Selecting/typing the built-in default is not an override: clear the stored
     // value (same as Reset) so the source reverts to “default” instead of “db”.
-    const meta = allFields.find((f) => f.key === key);
-    const value = meta?.splitAt
-      ? `${draft}@${effective('BASE_DOMAIN')}`
-      : meta?.splitUrl
-        ? `https://${draft}.${effective('BASE_DOMAIN')}`
-        : draft;
     const fallback = byKey.get(key)?.fallback ?? '';
-    save.mutate({ [key]: value === fallback && fallback !== '' ? null : value });
+    save.mutate({ [key]: draft === fallback && fallback !== '' ? null : draft });
   }
 
   function resetField(key: string) {
@@ -528,7 +485,9 @@ export default function Settings() {
         >
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 dark:bg-slate-800/60 dark:border-slate-700">
             <h2 className="text-base font-medium">{section.title}</h2>
-            <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">{section.description}</p>
+            {section.description && (
+              <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">{section.description}</p>
+            )}
             {section.note && (
               <div className="mt-2 rounded border border-sky-200 bg-sky-50 p-2.5 text-xs leading-relaxed text-sky-900 whitespace-pre-line dark:border-sky-900/60 dark:bg-sky-900/20 dark:text-sky-200">
                 {section.note}
@@ -539,7 +498,17 @@ export default function Settings() {
             {section.fields.map((f) => {
               const s = byKey.get(f.key);
               const editing = editKey === f.key;
-              const shownValue = editing ? draft : effective(f.key);
+              const picks = f.optionsFrom ? accessListPicks : null;
+              // Wait for name lookups before falling back to the raw ID, so the
+              // ID doesn't flash on load.
+              const resolving = !editing && (f.displayFrom === 'account-name' ? account.isLoading : !!picks?.loading);
+              const shownValue = editing
+                ? draft
+                : resolving
+                  ? ''
+                  : f.displayFrom === 'account-name'
+                    ? account.data?.name ?? effective(f.key)
+                    : picks?.options.find((o) => o.value === effective(f.key))?.label ?? effective(f.key);
               const bytes =
                 f.type === 'number' && f.key.endsWith('_BYTES') ? formatBytes(shownValue) : null;
               const locked = !editing;
@@ -595,22 +564,7 @@ export default function Settings() {
                         onChange={(e) => setDraft(e.target.value)}
                         className={inputClass}
                       />
-                    ) : f.splitUrl ? (
-                      <SubdomainInput
-                        value={editing ? draft : urlSubdomain(shownValue, effective('BASE_DOMAIN'))}
-                        onChange={setDraft}
-                        domain={effective('BASE_DOMAIN')}
-                        disabled={locked}
-                        placeholder={f.placeholder}
-                      />
-                    ) : f.splitAt ? (
-                      <LocalPartInput
-                        value={editing ? draft : localPart(shownValue)}
-                        onChange={setDraft}
-                        domain={effective('BASE_DOMAIN')}
-                        disabled={locked}
-                      />
-                    ) : f.optionsFrom ? (
+                    ) : picks ? (
                       locked ? (
                         // When not editing, show the value as a read-only input so
                         // it matches every other setting (same font colour); a
@@ -619,19 +573,13 @@ export default function Settings() {
                           id={f.key}
                           type="text"
                           value={shownValue}
+                          placeholder={resolving ? 'Loading…' : undefined}
                           readOnly
                           className={inputClass}
                         />
                       ) : (
                         (() => {
-                          const isDomains = f.optionsFrom === 'sending-domains';
-                          // Domains: only Email Routing-enabled zones. Workers: all
-                          // account Worker scripts.
-                          const names = isDomains
-                            ? (domains.data?.items ?? [])
-                                .filter((i) => i.routing === 'enabled')
-                                .map((i) => i.name)
-                            : workers.data?.items ?? [];
+                          const { options } = picks;
                           return (
                             <select
                               id={f.key}
@@ -642,21 +590,14 @@ export default function Settings() {
                               }}
                               className={inputClass}
                             >
-                              {/* Domains use an unselectable placeholder for the
-                                  not-yet-set case; workers always have a value. */}
-                              {isDomains && (
-                                <option value="" disabled>
-                                  Select a domain…
-                                </option>
-                              )}
-                              {names.map((n) => (
-                                <option key={n} value={n}>
-                                  {n}
+                              {options.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                  {o.label}
                                 </option>
                               ))}
                               {/* Keep the current value selectable if it isn't in the
                                   fetched list (still loading, or no longer present). */}
-                              {shownValue !== '' && !names.includes(shownValue) && (
+                              {shownValue !== '' && !options.some((o) => o.value === shownValue) && (
                                 <option value={shownValue}>{shownValue}</option>
                               )}
                             </select>
@@ -668,6 +609,7 @@ export default function Settings() {
                         id={f.key}
                         type={f.type === 'number' ? 'number' : 'text'}
                         value={shownValue}
+                        placeholder={resolving ? 'Loading…' : undefined}
                         readOnly={locked}
                         onChange={(e) => setDraft(e.target.value)}
                         className={inputClass}
@@ -689,37 +631,20 @@ export default function Settings() {
                       )}
                     </div>
                     {editing &&
-                      f.optionsFrom &&
+                      picks &&
                       (() => {
-                        const loading =
-                          f.optionsFrom === 'sending-domains' ? domains.isLoading : workers.isLoading;
-                        if (loading) {
+                        if (picks.loading) {
                           return (
                             <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                              {f.optionsFrom === 'workers' ? 'Loading workers…' : 'Loading domains…'}
+                              Loading {picks.noun}…
                             </p>
                           );
                         }
-                        let msg: string | null = null;
-                        if (f.optionsFrom === 'sending-domains') {
-                          const enabled = (domains.data?.items ?? []).filter(
-                            (i) => i.routing === 'enabled',
-                          );
-                          if (enabled.length === 0) {
-                            msg = domains.data?.error
-                              ? `Couldn’t load domains: ${domains.data.error}.`
-                              : domains.data?.routing_checkable === false
-                                ? 'Couldn’t read Email Routing status — the read API token needs account “Read all resources” scope.'
-                                : 'No domains have Email Routing enabled. Enable Email Routing on a domain in the Cloudflare dashboard, then reopen this field.';
-                          }
-                        } else {
-                          const items = workers.data?.items ?? [];
-                          if (items.length === 0) {
-                            msg = workers.data?.error
-                              ? `Couldn’t load workers: ${workers.data.error}.`
-                              : 'No Workers found in this account.';
-                          }
-                        }
+                        const msg = picks.options.length === 0
+                          ? picks.error
+                            ? `Couldn’t load ${picks.noun}: ${picks.error}.`
+                            : picks.empty
+                          : null;
                         return msg ? (
                           <p className="mt-1.5 text-[11px] leading-relaxed text-red-600 dark:text-red-400">
                             {msg}
@@ -889,54 +814,6 @@ function buildPlainPreview(template: string): string {
   let body = template.replace(FOOTER_TOKEN_RE, (_m, k: string) => FOOTER_SAMPLE_VARS[k] ?? '');
   if (!hadUnsub) body += `\nUnsubscribe: ${FOOTER_SAMPLE_VARS.unsubscribe_url}`;
   return body;
-}
-
-function urlSubdomain(url: string, domain: string): string {
-  if (!url) return '';
-  const withoutScheme = url.replace(/^https?:\/\//, '');
-  const suffix = '.' + domain;
-  if (domain && withoutScheme.endsWith(suffix)) return withoutScheme.slice(0, -suffix.length);
-  return withoutScheme.split('.')[0] ?? '';
-}
-
-function SubdomainInput({
-  value,
-  onChange,
-  domain,
-  disabled,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  domain: string;
-  disabled?: boolean;
-  placeholder?: string;
-}) {
-  return (
-    <div
-      className={`flex items-stretch rounded border overflow-hidden mt-0.5 ${
-        disabled
-          ? 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40'
-          : 'border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800'
-      }`}
-    >
-      <span className="flex items-center px-2 text-sm text-slate-400 bg-slate-50 border-r border-slate-200 select-none dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-500">
-        https://
-      </span>
-      <input
-        value={value}
-        disabled={disabled}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value.replace(/[/\s.]/g, '').trimStart())}
-        className="flex-[3] min-w-0 px-2 py-1 text-sm bg-transparent text-slate-900 outline-none disabled:cursor-not-allowed disabled:text-slate-500 placeholder:text-slate-400 dark:text-slate-100 dark:disabled:text-slate-400 dark:placeholder:text-slate-600"
-      />
-      {domain && (
-        <span className="flex-[4] min-w-0 flex items-center px-2 text-sm text-slate-400 bg-slate-50 border-l border-slate-200 select-none dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-500">
-          .{domain}
-        </span>
-      )}
-    </div>
-  );
 }
 
 function SourceBadge({ source, editing }: { source: Setting['source']; editing: boolean }) {

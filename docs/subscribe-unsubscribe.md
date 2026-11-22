@@ -205,7 +205,7 @@ All served by the **tracker worker** (`workers/tracker/src/index.ts`) at
      sends until confirmed.
 6. Sends the **confirmation email** (`sendConfirmationEmail()`, fired via
    `ctx.waitUntil`) using `buildEmail()` and the `SEND_EMAIL` binding. From
-   address = the newsletter's `from_address` or the global `FROM_ADDRESS`. The
+   address = the newsletter's `from_address` or `newsletter@<BASE_DOMAIN>`. The
    email contains a button + plain link to:
 
    ```

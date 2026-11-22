@@ -1,7 +1,7 @@
 import { EmailMessage } from 'cloudflare:email';
 import { verifyHmac } from '../../../shared/tracking';
 import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
-import { loadSettings, resolveTrackingBaseUrl, trackingEnabledGlobally } from '../../../shared/settings';
+import { defaultSender, loadSettings, resolveTrackingBaseUrl, trackingEnabledGlobally } from '../../../shared/settings';
 import { writeLog } from '../../../shared/db';
 import { fullName } from '../../../shared/mail-merge';
 
@@ -16,7 +16,6 @@ export interface Env {
   SEND_EMAIL?: { send(message: EmailMessage): Promise<void> };
   TURNSTILE_SECRET_KEY?: string;
   // Resolved from the D1 `settings` table at runtime (see loadSettings).
-  FROM_ADDRESS?: string;
   BASE_DOMAIN?: string;
   TRACKING_BASE_URL?: string;
   TURNSTILE_ENABLED?: string;
@@ -389,7 +388,7 @@ async function sendConfirmationEmail(
   verifyUrl: string,
 ): Promise<void> {
   if (!env.SEND_EMAIL) return;
-  const fromHeader = nl.from_address || cfg.FROM_ADDRESS || `newsletter@${cfg.BASE_DOMAIN ?? ''}`;
+  const fromHeader = nl.from_address || defaultSender(cfg.BASE_DOMAIN ?? '');
   const fromAddr = extractAddr(fromHeader);
   const messageId = `${crypto.randomUUID()}@${cfg.BASE_DOMAIN ?? 'localhost'}`;
   const subject = `Confirm your subscription to ${nl.name}`;

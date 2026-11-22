@@ -398,19 +398,23 @@ attachment links or analytics to remain available for longer.
 
 ## Initial setup
 
-Before the first campaign, an operator must configure the global **Settings** so
-they match the Cloudflare zone described under *Requirements*. Open the
-**Settings** page and set at least the sending identity and domains:
+The installer records the deployment values: the Cloudflare account, the
+**sending domain** (the zone newsletters send from and receive inbound mail on),
+its Email Routing zone, and the Zero Trust Emails list. **Settings → Deployment
+details** shows them read-only; only the **Emails list** can be changed, in
+case the list is recreated. Changing the account or domain means re-running the
+installer.
 
-- **Default from address** — the `From:` header for outbound mail (a newsletter
-  can override this with its own sender).
-- **Sending domain** — the Cloudflare zone newsletters send from and receive
-  inbound mail on. Saving it auto-resolves the Email Routing zone (see below);
-  it has no default and is stored only in the database.
-- **Tracking base URL** — the tracker worker's base URL (opens, clicks,
-  unsubscribe, downloads).
-- **Ingest worker name** — the worker the auto-managed Email Routing rules
-  forward inbound mail to.
+Outgoing mail uses fixed senders on the sending domain: newsletters without
+their own sender send from `newsletter@<domain>`, and console notifications
+(users added or removed) from `cf-newsletter-console@<domain>`.
+
+Tracking, unsubscribe and download links use the tracker's address, also
+recorded by the installer (`https://track.<domain>` by default). It isn't
+editable, because changing it would break links in emails already sent.
+
+Before the first campaign, review the other **Settings**:
+
 - **Public signup (optional)** — enable signup per newsletter. Fresh installs
   automatically attempt Turnstile setup; use **Settings → Subscribe** to enable,
   repair, or remove protection. The app validates and configures the widget's
@@ -421,7 +425,7 @@ they match the Cloudflare zone described under *Requirements*. Open the
 Each field is **locked until you click Edit**. A saved value is stored in the
 database and overrides the built-in default (defined in `shared/settings.ts`);
 **Reset** reverts a field to that default. Fields with no built-in default (the
-sending domain) have no Reset and must be set explicitly.
+Emails list) have no Reset.
 
 ### Why the Email Routing zone ID is needed (and how it's set)
 
@@ -431,18 +435,14 @@ newsletter's inbound address to the ingest worker — so authors can email a new
 newsletter without anyone touching the Cloudflare dashboard. Cloudflare's Email
 Routing API is **scoped per zone**, so this automation needs the Email Routing
 zone ID to know which zone's routing table to edit (together with the
-`CF_API_TOKEN` secret for permission, and **Ingest worker name** as the rule's
-target).
+`CF_API_TOKEN` secret for permission). Every rule targets the ingest worker,
+`cf-newsletter-ingest`.
 
-You don't enter the zone ID directly — it's **derived from the sending domain**.
-When you save the **Sending domain**, the console looks it up via the Cloudflare
-API using the `CF_READ_API_TOKEN` secret (Zone → Read) and stores the resolved
-zone ID for you, so the field isn't shown.
-
-It is only needed for that automation, not for sending. If `CF_READ_API_TOKEN`
-is unset, the domain isn't a Cloudflare zone in this account, or a token lacks
-scope, the domain still saves but the console shows a warning — and you must add
-each newsletter's Email Routing rule manually in the Cloudflare dashboard.
+You don't enter the zone ID: the installer records it together with the
+sending domain, so the field isn't shown. It is only needed for that
+automation, not for sending. If it is missing or a token lacks scope, the
+console shows a warning and you must add each newsletter's Email Routing rule
+manually in the Cloudflare dashboard.
 
 ## Requirements
 
@@ -459,25 +459,21 @@ each newsletter's Email Routing rule manually in the Cloudflare dashboard.
   cd workers/admin && npx wrangler secret put CF_API_TOKEN
   ```
 
-  The target worker is configured by the **Ingest worker name** setting; the
-  zone ID is resolved automatically from the **Sending domain** (see below).
+  Rules always target the `cf-newsletter-ingest` worker; the zone ID is
+  recorded by the installer (see below).
   Without the token, newsletter management still works but routing rules are
   **not** updated — the console shows a warning and you must add the Email
   Routing rule manually.
-- **API token to resolve the sending domain's zone** — saving the **Sending
-  domain** looks up its Email Routing zone ID via the Cloudflare API, and the
-  Settings pick-list reads each domain's Email Routing status. This uses a
-  read-only Cloudflare API token stored as the `CF_READ_API_TOKEN` secret:
+- **Read-only API token** — used to show the account name on **Settings →
+  Deployment details** and read sending quota and stats. It is stored as the
+  `CF_READ_API_TOKEN` secret:
 
   ```bash
   cd workers/admin && npx wrangler secret put CF_READ_API_TOKEN
   ```
 
-  Use an account-scoped **Read all resources** token: **Zone → Read** alone
-  resolves the zone ID but cannot read Email Routing status (the pick-list would
-  show every domain without an on/off indicator). Without the token, the domain
-  still saves but the zone ID isn't resolved (the console warns and you
-  configure Email Routing rules manually).
+  Use an account-scoped **Read all resources** token. Without it, the account
+  ID is shown instead of its name and the stats are unavailable.
 - **API token to sync console users** — adding/removing console users keeps the
   Cloudflare Access "Emails" list in sync. This uses an account-scoped token
   with **Zero Trust → Edit**, stored as the `CF_ZT_API_TOKEN` secret:

@@ -75,7 +75,7 @@ export interface Newsletter {
   id: string;
   name: string;
   inbound_address: string;
-  // Optional per-newsletter sender. null => falls back to global FROM_ADDRESS.
+  // Optional per-newsletter sender. null => falls back to newsletter@<BASE_DOMAIN>.
   from_address: string | null;
   reply_to_address?: string | null;
   reply_to_author?: 0 | 1;

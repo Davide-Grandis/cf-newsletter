@@ -27,6 +27,9 @@ import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
 import { sanitizeFooterHtml } from '../../../shared/footer';
 import { sanitizeMailMergeHtml, MAIL_MERGE_HTML_MAX, MAIL_MERGE_TEXT_MAX } from '../../../shared/mail-merge';
 import {
+  consoleSender,
+  defaultSender,
+  INSTALLER_LOCKED_SETTINGS,
   loadSettings,
   readStoredSettings,
   resolveTrackingBaseUrl,
@@ -62,7 +65,6 @@ export interface Env {
   // Email Routing zone id from BASE_DOMAIN when the sending domain is saved.
   CF_READ_API_TOKEN?: string;
   EMAIL_ROUTING_ZONE_ID?: string; // zone id for the newsletter domain (auto-resolved from BASE_DOMAIN)
-  INGEST_WORKER_NAME?: string; // worker script the rule forwards to
   BASE_DOMAIN?: string; // newsletter domain, e.g. for inbound-address hints
   // Console user management. The worker keeps the Cloudflare Access Emails list
   // (ACCESS_LIST_ID) in sync as console users are added/removed. Best-effort:
@@ -78,7 +80,6 @@ export interface Env {
   // Used to email a newly added console user a heads-up. Best-effort: if the
   // binding or sender is missing, user creation still succeeds with a warning.
   SEND_EMAIL?: SendEmail; // Cloudflare Email Sending binding
-  FROM_ADDRESS?: string; // resolved from settings — global sender identity
 }
 
 const BRANDING_LOGO_KEY = 'branding/logo';
@@ -168,7 +169,7 @@ export default {
         // cannot read the super_admin-only /api/settings): the sending domain
         // and the default sender, used by the newsletter create/edit forms.
         base_domain: cfg.BASE_DOMAIN ?? '',
-        from_address: (cfg as unknown as Record<string, string | undefined>).FROM_ADDRESS ?? '',
+        from_address: cfg.BASE_DOMAIN ? defaultSender(cfg.BASE_DOMAIN) : '',
         // The resolved global default footer, so the newsletter footer editor
         // can show what an empty (inherited) footer will actually send. The
         // stored HTML is already sanitized on save; sanitize again defensively.
@@ -252,21 +253,6 @@ function validateSetting(key: string, val: string): string | null {
   }
   if (key === 'BRANDING_TEXT_COLOR') {
     return val === '' || /^#[0-9a-fA-F]{6}$/.test(val) ? null : 'must be a six-digit hex color (e.g. #2563eb)';
-  }
-  if (key === 'BASE_DOMAIN') {
-    // The sending domain is required and must look like a hostname. Existence
-    // as a Cloudflare zone is verified separately (async) before it is stored.
-    const v = val.trim().toLowerCase();
-    if (v === '') return 'sending domain is required';
-    return /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(v)
-      ? null
-      : 'must be a valid domain, e.g. example.com';
-  }
-  if (key === 'ACCESS_ACCOUNT_ID') {
-    // Cloudflare account IDs are 32 hex characters. Empty disables list sync.
-    return val === '' || /^[0-9a-f]{32}$/i.test(val)
-      ? null
-      : 'must be a 32-character hexadecimal Cloudflare account ID (or empty to disable sync)';
   }
   if (key === 'ACCESS_LIST_ID') {
     // Zero Trust list IDs are UUIDs. Empty disables list sync.
@@ -642,15 +628,6 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     if ('TURNSTILE_ENABLED' in updates || 'TURNSTILE_SITE_KEY' in updates) {
       return Response.json({ error: 'Use Settings > Subscribe to validate and configure Turnstile before enabling it, or to confirm widget deletion.' }, { status: 400 });
     }
-    const nextTrackingUrl = resolveTrackingBaseUrl(
-      'TRACKING_BASE_URL' in updates ? updates.TRACKING_BASE_URL ?? SETTINGS_DEFAULTS.TRACKING_BASE_URL : env.TRACKING_BASE_URL ?? '',
-      'BASE_DOMAIN' in updates ? updates.BASE_DOMAIN ?? SETTINGS_DEFAULTS.BASE_DOMAIN : env.BASE_DOMAIN ?? '',
-    );
-    if (env.TURNSTILE_SITE_KEY &&
-        ((updates.ACCESS_ACCOUNT_ID !== undefined && updates.ACCESS_ACCOUNT_ID !== env.ACCESS_ACCOUNT_ID) ||
-         (nextTrackingUrl !== resolveTrackingBaseUrl(env.TRACKING_BASE_URL ?? '', env.BASE_DOMAIN ?? '')))) {
-      return Response.json({ error: 'Remove Turnstile from Settings > Subscribe before changing its Cloudflare account or tracking URL.' }, { status: 400 });
-    }
     const errors: Record<string, string> = {};
     const toSet: Array<[string, string]> = [];
     const toDelete: string[] = [];
@@ -659,8 +636,8 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         errors[key] = 'unknown setting';
         continue;
       }
-      if (key === 'DATA_LOCALITY') {
-        errors[key] = 'data locality is recorded by the installer and cannot be changed here';
+      if (INSTALLER_LOCKED_SETTINGS.has(key)) {
+        errors[key] = 'recorded by the installer and cannot be changed here';
         continue;
       }
       if (val === null) {
@@ -678,23 +655,6 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       return Response.json({ error: 'validation failed', errors }, { status: 400 });
     }
 
-    // The Email Routing zone id is never edited directly; it is derived from the
-    // sending domain. Saving BASE_DOMAIN therefore requires that the domain be a
-    // Cloudflare zone in this account — verify it FIRST and reject the save if it
-    // can't be confirmed, so an invalid domain is never persisted.
-    let resolvedZoneId: string | undefined;
-    const domainEntry = toSet.find(([key]) => key === 'BASE_DOMAIN');
-    if (domainEntry) {
-      const { zoneId, error } = await resolveZoneIdByDomain(env, domainEntry[1].trim().toLowerCase());
-      if (error || !zoneId) {
-        return Response.json(
-          { error: 'validation failed', errors: { BASE_DOMAIN: error ?? 'could not verify the domain' } },
-          { status: 400 },
-        );
-      }
-      resolvedZoneId = zoneId;
-    }
-
     const stmts: D1PreparedStatement[] = [];
     for (const [key, val] of toSet) {
       // The global default footer HTML is sanitized to the allow-list before it
@@ -710,150 +670,60 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     for (const key of toDelete) {
       stmts.push(rawEnv.DB.prepare('DELETE FROM settings WHERE key = ?').bind(key));
     }
-    // When the sending domain changes, automatically rewrite FROM_ADDRESS to use
-    // the new domain (preserving the local part), so the consumer sends from the
-    // correct address without requiring the admin to manually re-save that field.
-    if (domainEntry) {
-      const newDomain = domainEntry[1].trim().toLowerCase();
-      const fromRow = await rawEnv.DB
-        .prepare("SELECT value FROM settings WHERE key = 'FROM_ADDRESS'")
-        .first<{ value: string }>();
-      const currentFrom = fromRow?.value ?? SETTINGS_DEFAULTS.FROM_ADDRESS;
-      const atIdx = currentFrom.indexOf('@');
-      const localPart = atIdx >= 0 ? currentFrom.slice(0, atIdx) : currentFrom;
-      stmts.push(
-        rawEnv.DB.prepare(
-          "INSERT INTO settings (key, value) VALUES ('FROM_ADDRESS', ?) " +
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')",
-        ).bind(`${localPart}@${newDomain}`),
-      );
-    }
-
-    // Persist the verified zone id alongside the domain (or drop it if the
-    // domain is being cleared).
-    if (resolvedZoneId) {
-      stmts.push(
-        rawEnv.DB.prepare(
-          "INSERT INTO settings (key, value) VALUES ('EMAIL_ROUTING_ZONE_ID', ?) " +
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')",
-        ).bind(resolvedZoneId),
-      );
-    } else if (toDelete.includes('BASE_DOMAIN')) {
-      stmts.push(rawEnv.DB.prepare("DELETE FROM settings WHERE key = 'EMAIL_ROUTING_ZONE_ID'"));
-    }
     if (stmts.length > 0) await rawEnv.DB.batch(stmts);
 
     return Response.json({ ok: true, changed: toSet.length, cleared: toDelete.length });
   }
 
-  // Lists the Cloudflare zones (domains) in the account so the Settings page can
-  // offer the sending domain as a pick-list instead of free text. Uses the
-  // read-only token (Zone: Read); scoped to the configured account when known.
-  // Returns `{ items }` always; on failure includes a non-fatal `error` so the
-  // UI can fall back to manual entry.
-  if (p === '/api/sending-domains' && m === 'GET') {
+  // Resolves the installer-recorded Cloudflare account ID to its display name
+  // for the Settings page (Deployment details). Uses the read-only token.
+  // Returns `{ id, name }`; on failure `name` is null with a non-fatal `error`
+  // so the UI can fall back to showing the ID.
+  if (p === '/api/account' && m === 'GET') {
     if (!isSuper) return forbidden();
-    const token = env.CF_READ_API_TOKEN;
-    if (!token) {
-      return Response.json({
-        items: [],
-        error: 'read API token (CF_READ_API_TOKEN, Zone: Read) not configured',
-      });
+    const id = env.ACCESS_ACCOUNT_ID ?? '';
+    if (!id) return Response.json({ id, name: null, error: 'account ID not recorded by the installer' });
+    if (!env.CF_READ_API_TOKEN) {
+      return Response.json({ id, name: null, error: 'read API token (CF_READ_API_TOKEN) not configured' });
     }
     try {
-      const zones: { id: string; name: string }[] = [];
-      let page = 1;
-      for (;;) {
-        const q = new URLSearchParams({ per_page: '50', page: String(page) });
-        if (env.ACCESS_ACCOUNT_ID) q.set('account.id', env.ACCESS_ACCOUNT_ID);
-        const res = await fetch(`${CF_API}/zones?${q.toString()}`, {
-          headers: { authorization: `Bearer ${token}` },
-        });
-        const body: any = await res.json().catch(() => ({}));
-        if (!res.ok || body?.success === false) {
-          const msg =
-            (body?.errors ?? []).map((e: { message?: string }) => e.message).filter(Boolean).join('; ') ||
-            `HTTP ${res.status}`;
-          return Response.json({ items: [], error: `could not list domains: ${msg}` });
-        }
-        for (const z of body.result ?? []) if (z?.id && z?.name) zones.push({ id: String(z.id), name: String(z.name) });
-        const info = body.result_info;
-        if (!info || page >= (info.total_pages ?? 1)) break;
-        page++;
+      const res = await fetch(`${CF_API}/accounts/${id}`, {
+        headers: { authorization: `Bearer ${env.CF_READ_API_TOKEN}` },
+      });
+      const body: any = await res.json().catch(() => ({}));
+      if (!res.ok || body?.success === false || !body?.result?.name) {
+        const msg =
+          (body?.errors ?? []).map((e: { message?: string }) => e.message).filter(Boolean).join('; ') ||
+          `HTTP ${res.status}`;
+        return Response.json({ id, name: null, error: `could not read account: ${msg}` });
       }
-
-      // Best-effort Email Routing status per zone. Requires the read token to
-      // carry an Email Routing read permission (a "Read all resources" account
-      // token does; a plain Zone: Read does not). If every probe errors we
-      // report routing_checkable=false so the UI can say status is unknown.
-      let probeErrors = 0;
-      const items = await Promise.all(
-        zones.map(async (z) => {
-          try {
-            const rr = await fetch(`${CF_API}/zones/${z.id}/email/routing`, {
-              headers: { authorization: `Bearer ${token}` },
-            });
-            const rb: any = await rr.json().catch(() => ({}));
-            if (!rr.ok || rb?.success === false) {
-              probeErrors++;
-              return { name: z.name, routing: 'unknown' as const };
-            }
-            return { name: z.name, routing: rb?.result?.enabled ? ('enabled' as const) : ('disabled' as const) };
-          } catch {
-            probeErrors++;
-            return { name: z.name, routing: 'unknown' as const };
-          }
-        }),
-      );
-      items.sort((a, b) => a.name.localeCompare(b.name));
-      const routing_checkable = zones.length === 0 || probeErrors < zones.length;
-      return Response.json({ items, routing_checkable });
+      return Response.json({ id, name: String(body.result.name) });
     } catch (e) {
-      return Response.json({ items: [], error: `could not list domains: ${(e as Error).message}` });
+      return Response.json({ id, name: null, error: `could not read account: ${(e as Error).message}` });
     }
   }
 
-  // Lists the Worker scripts in the account so the Settings page can offer the
-  // ingest worker name as a pick-list. Uses the read-only token (needs Workers
-  // Scripts read; a "Read all resources" account token has it). Returns
+  // Lists the account's Zero Trust "Emails" lists so the Settings page can show
+  // the configured list by name and offer a pick-list when it is changed. Uses
+  // the Zero Trust token that already syncs list membership. Returns
   // `{ items }` always; on failure includes a non-fatal `error`.
-  if (p === '/api/workers' && m === 'GET') {
+  if (p === '/api/access-lists' && m === 'GET') {
     if (!isSuper) return forbidden();
-    const token = env.CF_READ_API_TOKEN;
-    if (!token) {
-      return Response.json({
-        items: [],
-        error: 'read API token (CF_READ_API_TOKEN) not configured',
-      });
+    if (!env.CF_ZT_API_TOKEN) {
+      return Response.json({ items: [], error: 'Zero Trust API token (CF_ZT_API_TOKEN) not configured' });
     }
     if (!env.ACCESS_ACCOUNT_ID) {
-      return Response.json({ items: [], error: 'account ID not configured (set it on the Access tab)' });
+      return Response.json({ items: [], error: 'account ID not recorded by the installer' });
     }
     try {
-      const names: string[] = [];
-      let page = 1;
-      for (;;) {
-        const q = new URLSearchParams({ per_page: '100', page: String(page) });
-        const res = await fetch(
-          `${CF_API}/accounts/${env.ACCESS_ACCOUNT_ID}/workers/scripts?${q.toString()}`,
-          { headers: { authorization: `Bearer ${token}` } },
-        );
-        const body: any = await res.json().catch(() => ({}));
-        if (!res.ok || body?.success === false) {
-          const msg =
-            (body?.errors ?? []).map((e: { message?: string }) => e.message).filter(Boolean).join('; ') ||
-            `HTTP ${res.status}`;
-          return Response.json({ items: [], error: `could not list workers: ${msg}` });
-        }
-        for (const s of body.result ?? []) if (s?.id) names.push(String(s.id));
-        const info = body.result_info;
-        if (!info || page >= (info.total_pages ?? 1)) break;
-        page++;
-      }
-      names.sort((a, b) => a.localeCompare(b));
-      return Response.json({ items: names });
+      const body = await cfZtJson(env, `${CF_API}/accounts/${env.ACCESS_ACCOUNT_ID}/gateway/lists?type=EMAIL`);
+      const items = ((body.result ?? []) as Array<{ id?: string; name?: string }>)
+        .filter((l) => l?.id)
+        .map((l) => ({ id: String(l.id), name: String(l.name ?? l.id) }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return Response.json({ items });
     } catch (e) {
-      return Response.json({ items: [], error: `could not list workers: ${(e as Error).message}` });
+      return Response.json({ items: [], error: `could not list Emails lists: ${(e as Error).message}` });
     }
   }
 
@@ -1423,7 +1293,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           binds.push(body.enabled ? 1 : 0);
         }
         // from_address: a non-empty string sets the per-newsletter sender;
-        // null or an empty string clears it (falls back to global FROM_ADDRESS).
+        // null or an empty string clears it (falls back to newsletter@<BASE_DOMAIN>).
         if (body.from_address === null || body.from_address === '') {
           sets.push('from_address = ?');
           binds.push(null);
@@ -1963,12 +1833,12 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         );
         if (!base) {
           return Response.json(
-            { error: 'Cannot send verification email: configure BASE_DOMAIN or TRACKING_BASE_URL in Settings' },
+            { error: 'Cannot send verification email: the sending domain is not recorded (re-run the installer)' },
             { status: 503 },
           );
         }
         const verifyUrl = `${base}/verify/${sid}?t=${encodeURIComponent(confirmToken)}`;
-        const fromHeader = nl.from_address || env.FROM_ADDRESS || `newsletter@${env.BASE_DOMAIN ?? ''}`;
+        const fromHeader = nl.from_address || defaultSender(env.BASE_DOMAIN ?? '');
         const fromAddr = extractAddr(fromHeader);
         const messageId = `${crypto.randomUUID()}@${env.BASE_DOMAIN ?? 'localhost'}`;
         const subject = `Confirm your subscription to ${nl.name}`;
@@ -2609,43 +2479,6 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
 
 const CF_API = 'https://api.cloudflare.com/client/v4';
 
-// Verifies a domain is a Cloudflare zone in this account and returns its zone id
-// via the Cloudflare API (zone names are globally unique, so `?name=` returns at
-// most one match). Uses the dedicated read-only token (CF_READ_API_TOKEN, Zone:
-// Read). On success returns the id; otherwise returns an `error` message — the
-// caller rejects the save so an unverifiable domain is never stored.
-async function resolveZoneIdByDomain(
-  env: Env,
-  domain: string,
-): Promise<{ zoneId?: string; error?: string }> {
-  const token = env.CF_READ_API_TOKEN;
-  if (!token) {
-    return {
-      error:
-        'cannot verify the domain: the read API token (CF_READ_API_TOKEN, Zone: Read) is not configured on the worker',
-    };
-  }
-  try {
-    const res = await fetch(`${CF_API}/zones?name=${encodeURIComponent(domain)}`, {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    const body: any = await res.json().catch(() => ({}));
-    if (!res.ok || body?.success === false) {
-      const msg =
-        (body?.errors ?? []).map((e: { message?: string }) => e.message).filter(Boolean).join('; ') ||
-        `HTTP ${res.status}`;
-      return { error: `could not verify ${domain} with Cloudflare: ${msg}` };
-    }
-    const zone = (body.result ?? [])[0];
-    if (!zone?.id) {
-      return { error: `${domain} is not a Cloudflare zone in this account` };
-    }
-    return { zoneId: String(zone.id) };
-  } catch (e) {
-    return { error: `could not verify ${domain} with Cloudflare: ${(e as Error).message}` };
-  }
-}
-
 // Reads the sending domain's real Email Sending usage from Cloudflare. Returns
 // two independent sections so the UI can show whatever is available:
 //   - `quota`     : the account's resolved daily sending limit (REST API).
@@ -2839,12 +2672,15 @@ async function cfJson(env: Env, urlStr: string, init: RequestInit = {}): Promise
   return body;
 }
 
+// The installer and updater always deploy the ingest worker under this name.
+const INGEST_WORKER_NAME = 'cf-newsletter-ingest';
+
 function ruleBody(env: Env, addr: string, enabled = true): string {
   return JSON.stringify({
     name: `newsletter:${addr}`,
     enabled,
     matchers: [{ type: 'literal', field: 'to', value: addr }],
-    actions: [{ type: 'worker', value: [env.INGEST_WORKER_NAME ?? 'cf-newsletter-ingest'] }],
+    actions: [{ type: 'worker', value: [INGEST_WORKER_NAME] }],
   });
 }
 
@@ -3066,15 +2902,12 @@ async function notifyUser(
   role: Role,
   event: 'added' | 'removed',
 ): Promise<string | undefined> {
-  const fromHeader = env.FROM_ADDRESS;
-  if (!env.SEND_EMAIL || !fromHeader) {
-    return `Notification email not sent to ${email} (SEND_EMAIL binding or FROM_ADDRESS not configured).`;
+  const baseDomain = env.BASE_DOMAIN;
+  if (!env.SEND_EMAIL || !baseDomain) {
+    return `Notification email not sent to ${email} (SEND_EMAIL binding or sending domain not configured).`;
   }
   try {
-    const fromAddr = extractAddr(fromHeader);
-    // Prefer the configured sending domain; fall back to the From address's
-    // domain so the console link is still sensible if BASE_DOMAIN is unset.
-    const baseDomain = env.BASE_DOMAIN || fromAddr.slice(fromAddr.indexOf('@') + 1);
+    const fromAddr = consoleSender(baseDomain);
     const consoleUrl = `https://console.${baseDomain}`;
     const isSuper = role === 'super_admin';
     const roleLabel = isSuper ? 'Super administrator' : 'Administrator';
@@ -3113,7 +2946,7 @@ async function notifyUser(
         `<p style="color:#64748b;font-size:12px">If you believe this is a mistake, please contact the sender of this email.</p>`;
     }
     const raw = buildEmail({
-      from: fromHeader,
+      from: fromAddr,
       to: email,
       subject,
       messageId: `${crypto.randomUUID()}@${baseDomain}`,
