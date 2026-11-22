@@ -22,9 +22,9 @@ function fixture() {
     CREATE TABLE update_lock(id INTEGER PRIMARY KEY,job_id TEXT);
     CREATE TABLE admins(email TEXT PRIMARY KEY,role TEXT,capability TEXT);
     CREATE TABLE admins_newsletters(email TEXT,newsletter_id TEXT);
-    CREATE TABLE newsletters(id TEXT,name TEXT,slug TEXT,from_address TEXT,allow_public_signup INTEGER,enabled INTEGER);
+    CREATE TABLE newsletters(id TEXT,name TEXT,slug TEXT,from_address TEXT,allow_public_signup INTEGER,enabled INTEGER,tracking_enabled INTEGER NOT NULL DEFAULT 0);
     INSERT INTO admins VALUES('root@example.com','super_admin','edit'),('admin@example.com','admin','edit');
-    INSERT INTO newsletters VALUES('newsletter','Test newsletter','test',NULL,1,1);
+    INSERT INTO newsletters(id,name,slug,from_address,allow_public_signup,enabled) VALUES('newsletter','Test newsletter','test',NULL,1,1);
   `);
   const prepare = (sql: string, params: unknown[] = []) => ({
     bind(...values: unknown[]) { return prepare(sql, values); },
