@@ -467,7 +467,7 @@ function Settings({
               <div className="min-w-0 flex flex-col gap-2">
                 <div>
                   <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+                    Reply-To address
                   </label>
                   <input
                     ref={replyToInputRef}
@@ -547,7 +547,7 @@ function Settings({
           <div className="min-w-0 flex flex-col gap-2">
             <div>
               <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Reply-To address <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+                Reply-To address
               </label>
               <input
                 type="text"
