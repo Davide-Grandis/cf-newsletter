@@ -18,32 +18,42 @@ be sent — so this is the security boundary of the system.
 
 ### Step by step
 
-**1. Authenticate the author.**
+**1. Read and parse the raw MIME** with `postal-mime` to get the `From:`
+address, subject, html, text, and `attachments[]` (each with filename,
+mimeType, bytes, contentId, and `disposition: 'attachment' | 'inline'`).
+
+**2. Authenticate the author.**
 
 ```ts
-const from = (message.from ?? '').toLowerCase();
+const from = parsed.from?.address?.toLowerCase() ?? '';
 const row = await env.DB
-  .prepare('SELECT 1 AS ok FROM authors WHERE email = ? LIMIT 1')
-  .bind(from)
+  .prepare('SELECT 1 AS ok FROM authors WHERE newsletter_id = ? AND email = ? LIMIT 1')
+  .bind(newsletterId, from)
   .first();
-if (!row) { message.setReject('Sender not authorized'); return; }
-const authResults = (message.headers.get('authentication-results') ?? '').toLowerCase();
-if (!/spf=pass/.test(authResults) || !/dkim=pass/.test(authResults)) {
-  message.setReject('SPF/DKIM verification failed');
-  return;
-}
+if (!row) { message.setReject('Sender not authorized for this newsletter'); return; }
+const auth = verifyAuthorAuthentication(raw, from); // shared/sender-auth.ts
+if (!auth.ok) { message.setReject('Sender could not be authenticated …'); return; }
 ```
 
-Two gates: the From header must match a row in the D1 `authors` table
-(case-insensitive — managed via the admin worker's `/api/authors` CRUD or
-the GUI's *Authors* page), **and** Cloudflare's own `Authentication-Results`
-header must show `spf=pass` and `dkim=pass`. The allow-list alone is not
-enough because From is forgeable; SPF + DKIM prove the message really
-originated from the claimed domain.
+Two gates, both on the visible `From:` address (not the SMTP envelope sender):
 
-**2. Read and parse the raw MIME** with `postal-mime` to get subject, html,
-text, and `attachments[]` (each with filename, mimeType, bytes,
-contentId, and `disposition: 'attachment' | 'inline'`).
+- it must be in the newsletter's D1 `authors` allow-list (case-insensitive —
+  managed from the console's *Authors* tab), **and**
+- it must be authenticated with DMARC alignment, according to the
+  `Authentication-Results` header Email Routing prepends. Only the first such
+  header is read, and only if its authserv-id is `mx.cloudflare.net`; any
+  others may have been supplied by the sender. The message is accepted when
+  `dmarc=pass` for the `From` domain. If that domain publishes no DMARC
+  policy, a passing DKIM signature (`header.d`) or SPF check
+  (`smtp.mailfrom`) aligned with the `From` domain is accepted instead. A
+  `dmarc=fail`, a message with zero or several `From:` headers, or a missing
+  Cloudflare result is rejected and logged as `sender_not_authenticated`.
+
+Email Routing on its own only requires SPF *or* DKIM to pass for *some*
+domain, and enforces DMARC only as strictly as the sender's policy asks
+(`p=none` is not enforced). Without the alignment check, a message
+DKIM-signed for an attacker's own domain could carry an author's address and
+publish to the whole list.
 
 **3. Validate attachments** against `AttachmentLimits` from env vars:
 per-file size, total size, count, allowed MIME, blocked extensions. If

@@ -14,7 +14,7 @@ raw archives in R2.
 ```
 Author ──▶ Email Routing ──▶ Ingest Worker (Email handler)
                                   │
-                                  ├── Auth check (allowed sender, SPF/DKIM)
+                                  ├── Auth check (allowed From, DMARC-aligned)
                                   ├── Parse MIME (postal-mime): subject, html, text, attachments
                                   ├── Validate + store attachments in R2
                                   ├── Insert campaign + attachment rows in D1
@@ -104,7 +104,7 @@ wrangler r2 object put cf-newsletter-admin/header.png \
 ### `ingest-worker` (Email Worker)
 
 - `email(message, env, ctx)` handler.
-- Verify sender exists in the D1 `authors` table (managed via the admin worker); require `Authentication-Results` SPF=pass, DKIM=pass.
+- Verify the `From:` address exists in the D1 `authors` table (managed via the admin worker) and is DMARC-aligned per Email Routing's `Authentication-Results` (`mx.cloudflare.net`): `dmarc=pass`, or aligned DKIM/SPF when the domain has no DMARC policy (`shared/sender-auth.ts`).
 - Parse with `postal-mime` → subject, html, text, `attachments[]`.
 - **Attachment handling**:
   - Validate count ≤ `MAX_ATTACHMENT_COUNT`, per-file ≤ `MAX_ATTACHMENT_BYTES`, total ≤ `MAX_TOTAL_ATTACHMENT_BYTES`.

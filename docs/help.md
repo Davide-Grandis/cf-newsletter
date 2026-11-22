@@ -24,7 +24,13 @@ and its own subscribers and authors.
   (see *Requirements*). Disabling a newsletter makes the ingest worker reject
   incoming mail for it.
 - **Authors** — only addresses on this list may send the newsletter. Inbound
-  mail from anyone else is rejected. Lookup is case-insensitive.
+  mail from anyone else is rejected. Lookup is case-insensitive and uses the
+  email's visible **From** address. That address must also be authenticated
+  for its domain (DMARC, or aligned DKIM/SPF when the domain has no DMARC
+  policy), so an author's address can't be forged. Mail sent normally from the
+  author's own mailbox passes; a rejection is logged on the **Logs** page as
+  `sender_not_authenticated`, typically when the message was relayed through a
+  third-party service that sends on the author's behalf.
 - **Subscribers** — recipients, scoped to the newsletter. Add individually
   (verified defaults to **False**), import from CSV, or export the current list
   to CSV. See *Subscriber CSV import* and *Subscriber statuses* below.

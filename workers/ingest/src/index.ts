@@ -11,6 +11,7 @@ import {
 import { estimateRawSize } from '../../../shared/mime';
 import { iterateActiveSubscribers, markCampaignCompleteIfDone, writeLog } from '../../../shared/db';
 import { loadSettings } from '../../../shared/settings';
+import { verifyAuthorAuthentication } from '../../../shared/sender-auth';
 import type { QueueMessage, Recipient } from '../../../shared/types';
 
 export interface Env {
@@ -74,39 +75,50 @@ export default {
     }
     const newsletterId = newsletter.id;
 
-    // 2. Author allow-list + auth check, scoped to this newsletter.
-    //    The allow-list lives in the D1 `authors` table and is managed via the
-    //    admin worker (CRUD endpoints / GUI). The lookup is case-insensitive.
-    const from = sender;
-    const authorRow = await env.DB
-      .prepare('SELECT 1 AS ok FROM authors WHERE newsletter_id = ? AND email = ? LIMIT 1')
-      .bind(newsletterId, from)
-      .first<{ ok: number }>();
+    // 2. Read and parse the raw MIME (also archived to R2). The author check
+    //    below needs the parsed `From:` header and the authentication results.
+    const raw = new Uint8Array(await streamToArrayBuffer(message.raw));
+    const parsed = await PostalMime.parse(raw);
+
+    // 3. Author allow-list + authentication, scoped to this newsletter.
+    //    The allow-list (D1 `authors`, managed from the console) is matched
+    //    against the visible `From:` address, not the SMTP envelope sender, and
+    //    that address must be DMARC-aligned per Email Routing's own
+    //    Authentication-Results header (see shared/sender-auth.ts). Email
+    //    Routing alone only requires SPF *or* DKIM to pass for *some* domain,
+    //    so an allow-list match without alignment is not proof of authorship.
+    const from = (parsed.from && 'address' in parsed.from ? parsed.from.address ?? '' : '').trim().toLowerCase();
+    const authorRow = from
+      ? await env.DB
+          .prepare('SELECT 1 AS ok FROM authors WHERE newsletter_id = ? AND email = ? LIMIT 1')
+          .bind(newsletterId, from)
+          .first<{ ok: number }>()
+      : null;
     if (!authorRow) {
       await writeLog(env.DB, {
         level: 'warn',
         source: 'ingest',
         event: 'ingest.rejected',
         newsletterId,
-        message: `Rejected: ${from} not authorized for this newsletter`,
-        detail: { reason: 'sender_not_authorized', from },
+        message: `Rejected: ${from || '(no From address)'} not authorized for this newsletter`,
+        detail: { reason: 'sender_not_authorized', from, envelopeFrom: sender },
       });
       message.setReject('Sender not authorized for this newsletter');
       return;
     }
-
-    // Sender authentication is enforced by Cloudflare Email Routing at the edge:
-    // since 2025-07-03 inbound mail must pass SPF or DKIM (and the sender's
-    // DMARC policy is honoured) before this worker is ever invoked. We therefore
-    // do NOT re-derive a verdict from the `Authentication-Results` header — that
-    // header is not a reliable carrier of the edge verdict and a strict
-    // spf=pass+dkim=pass match rejected legitimately-authenticated mail. The
-    // author allow-list above, combined with edge SPF/DKIM/DMARC enforcement,
-    // is the spoofing boundary.
-
-    // 3. Read raw MIME (also archived to R2)
-    const raw = new Uint8Array(await streamToArrayBuffer(message.raw));
-    const parsed = await PostalMime.parse(raw);
+    const auth = verifyAuthorAuthentication(raw, from);
+    if (!auth.ok) {
+      await writeLog(env.DB, {
+        level: 'warn',
+        source: 'ingest',
+        event: 'ingest.rejected',
+        newsletterId,
+        message: `Rejected: ${from} could not be authenticated (${auth.reason})`,
+        detail: { reason: 'sender_not_authenticated', check: auth.reason, from, envelopeFrom: sender },
+      });
+      message.setReject('Sender could not be authenticated (DMARC/DKIM/SPF alignment failed)');
+      return;
+    }
 
     const subject = parsed.subject ?? '(no subject)';
     const html = parsed.html ?? '';
