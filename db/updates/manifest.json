@@ -46,5 +46,11 @@
     "file": "0008_newsletter_tracking.sql",
     "description": "Enable open and click tracking per newsletter",
     "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('newsletters') WHERE name = 'tracking_enabled'"
+  },
+  {
+    "id": "0009_newsletter_footer_incoming",
+    "file": "0009_newsletter_footer_incoming.sql",
+    "description": "Choose between an added footer and a footer written in the incoming email",
+    "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('newsletters') WHERE name = 'footer_incoming'"
   }
 ]

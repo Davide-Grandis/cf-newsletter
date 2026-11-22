@@ -10,6 +10,8 @@ import NewsletterAdmins from './NewsletterAdmins';
 import { LocalPartInput, localPart } from './Newsletters';
 import { MailMergeEditor, type MailMergeUpdate } from '../components/MailMergeEditor';
 import { TrackingEditor } from '../components/TrackingEditor';
+import { hasUnsubscribePlaceholder, renderFooterHtml, renderFooterText } from '../../../shared/footer';
+import { fmtDate } from '../utils/date';
 
 type Tab = 'subscribers' | 'authors' | 'admins' | 'mail-merge' | 'footer' | 'signup' | 'tracking';
 
@@ -51,7 +53,7 @@ export default function NewsletterDetail() {
     mutationFn: (
       body: Partial<
         Pick<Newsletter, 'name' | 'inbound_address' | 'from_address' | 'reply_to_address' | 'footer_html' | 'footer_text' | 'slug'>
-      > & Partial<MailMergeUpdate> & { enabled?: boolean; allow_public_signup?: boolean; reply_to_author?: boolean; tracking_enabled?: boolean },
+      > & Partial<MailMergeUpdate> & { enabled?: boolean; allow_public_signup?: boolean; reply_to_author?: boolean; tracking_enabled?: boolean; footer_incoming?: boolean },
     ) => api<{ routing_warning?: string }>(`/api/newsletters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: async (res) => {
       setWarn(res.routing_warning ?? null);
@@ -69,7 +71,7 @@ export default function NewsletterDetail() {
     reply_to_author?: boolean;
   }) =>
     patch.mutateAsync(body);
-  const saveFooter = (body: { footer_html?: string | null; footer_text?: string | null }) =>
+  const saveFooter = (body: { footer_html?: string | null; footer_text?: string | null; footer_incoming?: boolean }) =>
     patch.mutateAsync(body);
   const saveMailMerge = (body: MailMergeUpdate) => patch.mutateAsync(body);
   const saveSignup = (body: { slug?: string; allow_public_signup?: boolean }) => patch.mutateAsync(body);
@@ -572,38 +574,24 @@ function Settings({
 // absent, append an unsubscribe line so the preview matches what recipients
 // get. No sanitization is needed here because the preview is shown in a
 // sandboxed iframe (no scripts); the server sanitizes on save.
-const SAMPLE_VARS: Record<string, string> = {
+const SAMPLE_VARS = {
   unsubscribe_url: 'https://track.example.com/u/123?t=sample-token',
-  newsletter_name: '',
   email: 'subscriber@example.com',
 };
-const FOOTER_TOKEN_RE = /\{\{\s*(unsubscribe_url|newsletter_name|email)\s*\}\}/g;
 
 function buildFooterPreview(template: string, newsletterName: string): string {
-  const vars: Record<string, string> = { ...SAMPLE_VARS, newsletter_name: newsletterName };
-  const hadUnsub = /\{\{\s*unsubscribe_url\s*\}\}/.test(template);
-  let body = template.replace(FOOTER_TOKEN_RE, (_m, k: string) => vars[k] ?? '');
-  if (!hadUnsub) {
-    body +=
-      `\n<p style="font-size:12px;line-height:1.5;color:#64748b;margin:8px 0 0">` +
-      `<a href="${vars.unsubscribe_url}" style="color:#64748b">Unsubscribe</a></p>`;
-  }
   return (
     `<!doctype html><html><head><meta charset="utf-8">` +
     `<style>body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;` +
     `font-size:14px;color:#0f172a;margin:12px;background:#fff}a{color:#2563eb}</style></head>` +
-    `<body>${body}</body></html>`
+    `<body>${renderFooterHtml(template, { ...SAMPLE_VARS, newsletter_name: newsletterName })}</body></html>`
   );
 }
 
 // Plain-text counterpart of buildFooterPreview: substitute tokens and ensure
 // an unsubscribe line is present, matching the consumer's text renderer.
 function buildTextPreview(template: string, newsletterName: string): string {
-  const vars: Record<string, string> = { ...SAMPLE_VARS, newsletter_name: newsletterName };
-  const hadUnsub = /\{\{\s*unsubscribe_url\s*\}\}/.test(template);
-  let body = template.replace(FOOTER_TOKEN_RE, (_m, k: string) => vars[k] ?? '');
-  if (!hadUnsub) body += `\nUnsubscribe: ${vars.unsubscribe_url}`;
-  return body;
+  return renderFooterText(template, { ...SAMPLE_VARS, newsletter_name: newsletterName }).replace(/^\n/, '');
 }
 
 function FooterEditor({
@@ -616,7 +604,7 @@ function FooterEditor({
 }: {
   n: Newsletter;
   canEdit: boolean;
-  onSave: (body: { footer_html?: string | null; footer_text?: string | null }) => Promise<unknown>;
+  onSave: (body: { footer_html?: string | null; footer_text?: string | null; footer_incoming?: boolean }) => Promise<unknown>;
   saving: boolean;
   defaultHtml: string;
   defaultText: string;
@@ -627,144 +615,191 @@ function FooterEditor({
   // saving re-inherits the global default.
   const baselineHtml = n.footer_html && n.footer_html.trim() !== '' ? n.footer_html : defaultHtml;
   const baselineText = n.footer_text && n.footer_text.trim() !== '' ? n.footer_text : defaultText;
-  const [editing, setEditing] = useState(false);
+  const baselineIncoming = n.footer_incoming === 1;
+  const [incoming, setIncoming] = useState(baselineIncoming);
   const [html, setHtml] = useState(baselineHtml);
   const [text, setText] = useState(baselineText);
   const [error, setError] = useState<string | null>(null);
 
-  // Keep the (read-only) view synced with the latest props until the user
-  // starts editing. Needed because the global default arrives asynchronously
-  // from /api/me and may not be present on first render.
-  useEffect(() => {
-    if (!editing) {
-      setHtml(baselineHtml);
-      setText(baselineText);
-    }
-  }, [editing, baselineHtml, baselineText]);
-
   function reset() {
+    setIncoming(baselineIncoming);
     setHtml(baselineHtml);
     setText(baselineText);
     setError(null);
   }
 
-  const dirty = html !== baselineHtml || text !== baselineText;
+  // Saved values (and the asynchronously loaded global default) replace local
+  // edits only when the stored configuration changes.
+  useEffect(reset, [baselineIncoming, baselineHtml, baselineText]);
+
+  const locked = !canEdit || saving;
+  const dirty = incoming !== baselineIncoming || html !== baselineHtml || text !== baselineText;
   const effectiveHtml = html.trim() === '' ? defaultHtml : html;
   const effectiveText = text.trim() === '' ? defaultText : text;
   const previewDoc = useMemo(() => buildFooterPreview(effectiveHtml, n.name), [effectiveHtml, n.name]);
 
+  const missingParts = incoming
+    ? [n.last_campaign_footer?.missing_html && 'HTML', n.last_campaign_footer?.missing_text && 'plain-text'].filter(Boolean)
+    : [!hasUnsubscribePlaceholder(effectiveHtml) && 'HTML', !hasUnsubscribePlaceholder(effectiveText) && 'plain-text'].filter(Boolean);
+  const missingLabel = missingParts.length === 2 ? 'the HTML and plain-text parts' : `the ${missingParts[0]} part`;
+
   async function save() {
-    if (!dirty) {
-      setEditing(false);
-      return;
-    }
     setError(null);
     try {
       // Empty string clears the override so the newsletter inherits the global
       // default footer.
-      await onSave({ footer_html: html.trim() ? html : '', footer_text: text.trim() ? text : '' });
-      setEditing(false);
+      await onSave({ footer_incoming: incoming, footer_html: html.trim() ? html : '', footer_text: text.trim() ? text : '' });
     } catch (e) {
       setError((e as Error).message);
     }
   }
 
+  const optionCls = (selected: boolean) =>
+    `flex items-start gap-3 rounded-md border p-3 text-sm ${locked ? '' : 'cursor-pointer'} ${selected ? 'border-sky-500 bg-white dark:border-sky-500 dark:bg-slate-900' : 'border-slate-200 dark:border-slate-700'}`;
+  const tokens = (
+    <>
+      <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{unsubscribe_url}}'}</code>,{' '}
+      <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{newsletter_name}}'}</code> and{' '}
+      <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{email}}'}</code>
+    </>
+  );
+
   return (
-    <section className="bg-white border border-slate-200 rounded p-3 dark:bg-slate-900 dark:border-slate-800">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Email footer</h2>
-        {!editing &&
-          canEdit && (
-            <button
-              type="button"
-              onClick={() => {
-                reset();
-                setEditing(true);
-              }}
-              className="text-sm rounded px-3 py-1.5 border border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Edit
-            </button>
+    <section className="bg-white border border-slate-200 rounded p-4 space-y-4 dark:bg-slate-900 dark:border-slate-800">
+      <div>
+        <h2 className="text-sm font-medium text-slate-900 dark:text-slate-100">Email footer</h2>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          Every email carries a footer with an unsubscribe link. Use {tokens}. If{' '}
+          <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{unsubscribe_url}}'}</code> is missing, an
+          unsubscribe link is added automatically.
+        </p>
+      </div>
+
+      <fieldset className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+        <legend className="sr-only">Footer mode</legend>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className={optionCls(!incoming)}>
+            <input
+              type="radio"
+              name="footer-mode"
+              className="mt-0.5"
+              checked={!incoming}
+              disabled={locked}
+              onChange={() => setIncoming(false)}
+            />
+            <span>
+              <span className="block font-medium text-slate-900 dark:text-slate-100">Add footer</span>
+              <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                The footer below is added to the bottom of outgoing emails. Clear both fields to inherit the global default.
+              </span>
+            </span>
+          </label>
+          <label className={optionCls(incoming)}>
+            <input
+              type="radio"
+              name="footer-mode"
+              className="mt-0.5"
+              checked={incoming}
+              disabled={locked}
+              onChange={() => setIncoming(true)}
+            />
+            <span>
+              <span className="block font-medium text-slate-900 dark:text-slate-100">Footer is included in the incoming email</span>
+              <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                Write the footer in the incoming email&apos;s HTML and/or plain-text body using {tokens}. Its formatting is retained.
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      {missingParts.length > 0 && (
+        <p role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+          {incoming ? (
+            <>
+              The last email received
+              {n.last_campaign_footer ? <> (&ldquo;{n.last_campaign_footer.subject}&rdquo;, {fmtDate(n.last_campaign_footer.created_at)})</> : null}{' '}
+              has no <code>{'{{unsubscribe_url}}'}</code> in {missingLabel}, so an unsubscribe link was added at the bottom.
+              Add it to the emails you send to this newsletter.
+            </>
+          ) : (
+            <>
+              The footer has no <code>{'{{unsubscribe_url}}'}</code> in {missingLabel}, so an unsubscribe link is added at the
+              bottom automatically.
+            </>
           )}
-      </div>
+        </p>
+      )}
 
-      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-        Appended to every email for this newsletter. Pre-filled with the global default so you can
-        customize it; clear both fields to inherit the global default again. Tokens:{' '}
-        <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{unsubscribe_url}}'}</code>{' '}
-        <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{newsletter_name}}'}</code>{' '}
-        <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{email}}'}</code>. An
-        unsubscribe link is always added even if you omit the token.
-      </p>
-
-      <div className="mt-3 grid gap-4 lg:grid-cols-2">
-        <div>
-          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            HTML footer
-          </label>
-          <textarea
-            value={html}
-            disabled={!editing}
-            onChange={(e) => setHtml(e.target.value)}
-            rows={8}
-            spellCheck={false}
-            placeholder={defaultHtml || 'Inherits the global default footer when empty.'}
-            className={`${inputCls} font-mono text-xs leading-relaxed`}
-          />
-          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-3 block">
-            Plain-text footer
-          </label>
-          <textarea
-            value={text}
-            disabled={!editing}
-            onChange={(e) => setText(e.target.value)}
-            rows={4}
-            spellCheck={false}
-            placeholder={defaultText || 'Inherits the global default footer when empty.'}
-            className={`${inputCls} font-mono text-xs leading-relaxed`}
-          />
+      {!incoming && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div>
+            <label htmlFor="footer-html" className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              HTML footer
+            </label>
+            <textarea
+              id="footer-html"
+              value={html}
+              disabled={locked}
+              onChange={(e) => setHtml(e.target.value)}
+              rows={8}
+              spellCheck={false}
+              placeholder={defaultHtml || 'Inherits the global default footer when empty.'}
+              className={`${inputCls} font-mono text-xs leading-relaxed`}
+            />
+            <label htmlFor="footer-text" className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-3 block">
+              Plain-text footer
+            </label>
+            <textarea
+              id="footer-text"
+              value={text}
+              disabled={locked}
+              onChange={(e) => setText(e.target.value)}
+              rows={4}
+              spellCheck={false}
+              placeholder={defaultText || 'Inherits the global default footer when empty.'}
+              className={`${inputCls} font-mono text-xs leading-relaxed`}
+            />
+          </div>
+          <div>
+            <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              HTML preview
+            </span>
+            <iframe
+              title="Footer preview"
+              sandbox=""
+              srcDoc={previewDoc}
+              className="mt-0.5 w-full h-[160px] border border-slate-200 rounded bg-white dark:border-slate-700"
+            />
+            <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-3 block">
+              Text preview
+            </label>
+            <pre className="mt-0.5 w-full h-[90px] overflow-auto border border-slate-200 rounded bg-slate-50 p-2 text-xs whitespace-pre-wrap font-mono text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-200">
+              {buildTextPreview(effectiveText, n.name)}
+            </pre>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+              Preview uses sample values; links are not click-tracked in the actual footer.
+            </p>
+          </div>
         </div>
-        <div>
-          <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            HTML preview
-          </span>
-          <iframe
-            title="Footer preview"
-            sandbox=""
-            srcDoc={previewDoc}
-            className="mt-0.5 w-full h-[160px] border border-slate-200 rounded bg-white dark:border-slate-700"
-          />
-          <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-3 block">
-            Text preview
-          </label>
-          <pre className="mt-0.5 w-full h-[90px] overflow-auto border border-slate-200 rounded bg-slate-50 p-2 text-xs whitespace-pre-wrap font-mono text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-200">
-            {buildTextPreview(effectiveText, n.name)}
-          </pre>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
-            Preview uses sample values; links are not click-tracked in the actual footer.
-          </p>
-        </div>
-      </div>
+      )}
 
-      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
 
-      {editing && (
-        <div className="mt-3 flex gap-2">
+      {canEdit && dirty && (
+        <div className="flex gap-2">
           <button
             type="button"
-            disabled={!dirty || saving}
+            disabled={saving}
             onClick={save}
             className="bg-slate-900 text-white text-sm rounded px-3 py-1.5 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
           >
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? 'Saving...' : 'Save'}
           </button>
           <button
             type="button"
             disabled={saving}
-            onClick={() => {
-              reset();
-              setEditing(false);
-            }}
+            onClick={reset}
             className="text-sm rounded px-3 py-1.5 border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             Cancel

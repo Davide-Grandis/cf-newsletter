@@ -24,7 +24,7 @@ import {
   type WarmupState,
 } from '../../../shared/warmup';
 import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
-import { sanitizeFooterHtml } from '../../../shared/footer';
+import { hasUnsubscribePlaceholder, sanitizeFooterHtml } from '../../../shared/footer';
 import { sanitizeMailMergeHtml, MAIL_MERGE_HTML_MAX, MAIL_MERGE_TEXT_MAX } from '../../../shared/mail-merge';
 import {
   consoleSender,
@@ -1239,7 +1239,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       if (m === 'GET') {
         const row = await env.DB
           .prepare(
-            `SELECT n.id, n.name, n.inbound_address, n.from_address, n.reply_to_address, n.reply_to_author, n.footer_html, n.footer_text, ` +
+            `SELECT n.id, n.name, n.inbound_address, n.from_address, n.reply_to_address, n.reply_to_author, n.footer_html, n.footer_text, n.footer_incoming, ` +
               `n.mail_merge_enabled, n.mail_merge_incoming, n.mail_merge_html, n.mail_merge_text, n.slug, n.allow_public_signup, n.tracking_enabled, n.enabled, n.created_at, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id) AS subscriber_count, ` +
               `(SELECT COUNT(*) FROM subscribers s WHERE s.newsletter_id = n.id AND s.status='active') AS active_count, ` +
@@ -1250,7 +1250,17 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           .bind(nid)
           .first();
         if (!row) return Response.json({ error: 'not found' }, { status: 404 });
-        return Response.json(row);
+        const last = await env.DB
+          .prepare('SELECT subject, html, text, created_at FROM campaigns WHERE newsletter_id = ? ORDER BY created_at DESC LIMIT 1')
+          .bind(nid)
+          .first<{ subject: string; html: string | null; text: string | null; created_at: string }>();
+        const last_campaign_footer = last && {
+          subject: last.subject,
+          created_at: last.created_at,
+          missing_html: !hasUnsubscribePlaceholder(last.html?.trim() ? last.html : last.text),
+          missing_text: !hasUnsubscribePlaceholder(last.text),
+        };
+        return Response.json({ ...row, last_campaign_footer });
       }
       if (m === 'PATCH') {
         const body = await req.json<{
@@ -1269,6 +1279,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           slug?: string;
           allow_public_signup?: boolean;
           tracking_enabled?: unknown;
+          footer_incoming?: unknown;
         }>();
         const sets: string[] = [];
         const binds: unknown[] = [];
@@ -1401,6 +1412,13 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           }
           sets.push('slug = ?');
           binds.push(slug);
+        }
+        if ('footer_incoming' in body) {
+          if (typeof body.footer_incoming !== 'boolean') {
+            return Response.json({ error: 'footer_incoming must be a boolean' }, { status: 400 });
+          }
+          sets.push('footer_incoming = ?');
+          binds.push(body.footer_incoming ? 1 : 0);
         }
         if (typeof body.allow_public_signup === 'boolean') {
           sets.push('allow_public_signup = ?');

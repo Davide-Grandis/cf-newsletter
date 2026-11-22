@@ -241,15 +241,33 @@ campaign sent.
 
 ## Email footer
 
-Every email gets a **footer** appended to both its HTML and plain-text parts.
-The footer always contains an **unsubscribe link** (in addition to the
-`List-Unsubscribe` header mail clients use for their native button).
+Every email carries a **footer** in both its HTML and plain-text parts, and
+always an **unsubscribe link** (in addition to the `List-Unsubscribe` header
+mail clients use for their native button). Unlike mail merge, the footer can't
+be turned off. On a newsletter's **Footer** tab choose how it is provided:
+
+- **Add footer** (default) — the footer configured below is appended to every
+  email.
+- **Footer is included in the incoming email** — write the footer yourself in
+  the email you send to the newsletter, using the same tokens, e.g.
+  `<a href="{{unsubscribe_url}}">Unsubscribe</a>`. Nothing else is appended.
+  Links inserted with a mail client's link dialog that turn the token into
+  `http://{{unsubscribe_url}}` or `%7B%7Bunsubscribe_url%7D%7D` still work, and
+  a token in plain text becomes a clickable link. `{{newsletter_name}}` and
+  `{{email}}` are replaced in visible text only. The unsubscribe link is never
+  click-tracked.
+
+If `{{unsubscribe_url}}` is missing from a part — from the footer in the first
+mode, or from the incoming email in the second — an unsubscribe line is
+appended to that part automatically. The Footer tab shows a red warning when
+this happens: for the configured footer as you edit it, and in incoming mode
+for the last email received by the newsletter.
 
 - **Global default** — set under **Settings → Email sending → Default footer**
   (`DEFAULT_FOOTER_HTML` / `DEFAULT_FOOTER_TEXT`). Used for any newsletter that
   has no footer of its own.
-- **Per-newsletter footer** — on a newsletter's page, the **Email footer** card
-  lets you override the default with HTML and plain-text specific to that
+- **Per-newsletter footer** — in **Add footer** mode the Footer tab lets you
+  override the default with HTML and plain-text specific to that
   newsletter, with a **live preview**. Leave both fields empty to inherit the
   global default.
 - **Tokens** — `{{unsubscribe_url}}`, `{{newsletter_name}}` and `{{email}}` are

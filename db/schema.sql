@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS newsletters (
   -- consumer always guarantees an unsubscribe link (see shared/footer.ts).
   footer_html     TEXT,
   footer_text     TEXT,
+  footer_incoming INTEGER NOT NULL DEFAULT 0 CHECK (footer_incoming IN (0,1)),
   -- Clean public identifier for the subscribe URL (/subscribe/<slug>). NULL
   -- until set; the unique index allows many NULLs.
   slug            TEXT,

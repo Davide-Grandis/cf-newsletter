@@ -16,7 +16,14 @@ import {
   saveDailyCap,
 } from '../../../shared/db';
 import { instrumentHtml, unsubscribeUrl, signDownloadUrl, mailtoUnsubscribeAddress } from '../../../shared/tracking';
-import { resolveFooter, renderFooterHtml, renderFooterText } from '../../../shared/footer';
+import {
+  prepareIncomingFooterHtml,
+  renderFooterHtml,
+  renderFooterText,
+  renderIncomingFooterHtml,
+  renderIncomingFooterText,
+  resolveFooter,
+} from '../../../shared/footer';
 import { applyMailMerge, fullName } from '../../../shared/mail-merge';
 import type { QueueMessage } from '../../../shared/types';
 import {
@@ -213,7 +220,9 @@ export default {
             // text, so HTML-preferring clients don't show an empty message.
             const sourceHtml = campaign.html?.trim() ? campaign.html : textToHtml(campaign.text ?? '');
             let body = { html: sourceHtml, text: campaign.text ?? '' };
+            const footerIncoming = campaign.footer_incoming === 1;
             if (mergeIncoming) body = applyMailMerge(campaign, vars, body.html, body.text);
+            if (footerIncoming) body.html = prepareIncomingFooterHtml(body.html);
             let html = await renderRecipientHtml(env, { ...campaign, html: body.html }, allAtts, r.subscriberId, consents.has(r.subscriberId));
             let text = body.text;
             // Incoming placeholders are resolved before tracking; the separate
@@ -230,13 +239,13 @@ export default {
               newsletter_name: campaign.newsletter_name ?? '',
               email: r.email,
             };
-            const footerHtmlTpl = resolveFooter(campaign.footer_html, env.DEFAULT_FOOTER_HTML);
-            if (footerHtmlTpl.trim() !== '') {
-              html += '\n' + renderFooterHtml(footerHtmlTpl, footerVars);
-            }
-            const footerTextTpl = resolveFooter(campaign.footer_text, env.DEFAULT_FOOTER_TEXT);
-            if (footerTextTpl.trim() !== '') {
-              text += (text && !text.endsWith('\n') ? '\n\n' : '') + renderFooterText(footerTextTpl, footerVars);
+            if (footerIncoming) {
+              html = renderIncomingFooterHtml(html, footerVars);
+              text = renderIncomingFooterText(text, footerVars);
+            } else {
+              html += '\n' + renderFooterHtml(resolveFooter(campaign.footer_html, env.DEFAULT_FOOTER_HTML), footerVars);
+              const footerText = renderFooterText(resolveFooter(campaign.footer_text, env.DEFAULT_FOOTER_TEXT), footerVars);
+              text += (text && !text.endsWith('\n') ? '\n\n' : '') + footerText.replace(/^\n/, '');
             }
             const messageId = `${crypto.randomUUID()}@${env.BASE_DOMAIN}`;
             // Per-newsletter sender if set, otherwise the global default.

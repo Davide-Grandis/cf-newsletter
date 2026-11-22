@@ -75,6 +75,74 @@ export function renderFooterText(template: string, vars: FooterVars): string {
   return text;
 }
 
+// `{{unsubscribe_url}}` as typed, or as mail clients' link dialogs mangle it:
+// prefixed with http(s):// and/or with percent-encoded braces.
+const UNSUB_FORMS = String.raw`(?:https?:\/\/)?(?:\{\{|%7B%7B)\s*unsubscribe_url\s*(?:\}\}|%7D%7D)`;
+const UNSUB_ANY_RE = new RegExp(UNSUB_FORMS, 'i');
+const UNSUB_HREF_RE = new RegExp(String.raw`href\s*=\s*(["'])\s*${UNSUB_FORMS}\s*\1`, 'gi');
+const CANONICAL_UNSUB_HREF_RE = /href="\{\{unsubscribe_url\}\}"/gi;
+const INCOMING_TEXT_RE = new RegExp(String.raw`(${UNSUB_FORMS})|\{\{\s*(newsletter_name|email)\s*\}\}`, 'gi');
+const HTML_PARTS_RE =
+  /<!--[\s\S]*?(?:-->|$)|<(head|script|style|title)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1\s*>|<(?:[^>"']|"[^"]*"|'[^']*')*>|([^<]+)/gi;
+
+/** Whether an email body or footer template contains the unsubscribe placeholder. */
+export function hasUnsubscribePlaceholder(content: string | null | undefined): boolean {
+  return !!content && UNSUB_ANY_RE.test(content);
+}
+
+/**
+ * Incoming-footer mode, before click tracking: normalise unsubscribe links to
+ * `href="{{unsubscribe_url}}"`. Tracking only rewrites http(s) links, so the
+ * placeholder passes through untouched and the real unsubscribe URL (inserted
+ * afterwards) is never redirected through the tracker.
+ */
+export function prepareIncomingFooterHtml(html: string): string {
+  return html.replace(UNSUB_HREF_RE, 'href="{{unsubscribe_url}}"');
+}
+
+/**
+ * Incoming-footer mode, after click tracking: resolve the footer variables in
+ * the email's own HTML. The unsubscribe URL fills link targets and visible
+ * text (outside a link it becomes a link); the other variables are replaced in
+ * visible text only. Without any unsubscribe placeholder, the standard
+ * unsubscribe line is appended so every email keeps a visible link.
+ */
+export function renderIncomingFooterHtml(html: string, vars: FooterVars): string {
+  const url = escapeAttrUrl(vars.unsubscribe_url);
+  let found = false;
+  let inLink = false;
+  const out = html.replace(HTML_PARTS_RE, (part, element: string | undefined, text: string | undefined) => {
+    if (text === undefined) {
+      if (element || part.startsWith('<!--')) return part;
+      if (/^<a\b/i.test(part)) inLink = true;
+      else if (/^<\/a\b/i.test(part)) inLink = false;
+      return part.replace(CANONICAL_UNSUB_HREF_RE, () => {
+        found = true;
+        return `href="${url}"`;
+      });
+    }
+    return text.replace(INCOMING_TEXT_RE, (_m, unsub: string | undefined, key: 'newsletter_name' | 'email' | undefined) => {
+      if (unsub === undefined) return escapeHtml(vars[key!]);
+      found = true;
+      return inLink ? url : `<a href="${url}">${url}</a>`;
+    });
+  });
+  return found ? out : out + renderFooterHtml('', vars);
+}
+
+/** Plain-text counterpart of {@link renderIncomingFooterHtml}. */
+export function renderIncomingFooterText(text: string, vars: FooterVars): string {
+  let found = false;
+  const out = text.replace(INCOMING_TEXT_RE, (_m, unsub: string | undefined, key: 'newsletter_name' | 'email' | undefined) => {
+    if (unsub === undefined) return vars[key!];
+    found = true;
+    return vars.unsubscribe_url;
+  });
+  if (found) return out;
+  const body = out.replace(/\s+$/, '');
+  return (body ? `${body}\n\n` : '') + renderFooterText('', vars).trimStart();
+}
+
 // ---------------- HTML sanitizer (allow-list) ----------------
 
 const ALLOWED_TAGS = new Set([
