@@ -665,16 +665,12 @@ function FooterEditor({
 
   return (
     <section className="bg-white border border-slate-200 rounded p-4 space-y-4 dark:bg-slate-900 dark:border-slate-800">
-      <div>
-        <h2 className="text-sm font-medium text-slate-900 dark:text-slate-100">Email footer</h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Every email carries a footer with an unsubscribe link.
-          <br />
-          Use {tokens}. If{' '}
-          <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{unsubscribe_url}}'}</code> is missing, an
-          unsubscribe link is added automatically.
-        </p>
-      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Every email must carry an unsubscribe link. Use {tokens}.
+        <br />
+        Note: If <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{unsubscribe_url}}'}</code> is missing, an
+        unsubscribe link is added automatically.
+      </p>
 
       <fieldset className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
         <legend className="sr-only">Footer mode</legend>
