@@ -687,7 +687,7 @@ function FooterEditor({
             <span>
               <span className="block font-medium text-slate-900 dark:text-slate-100">Add footer</span>
               <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                The footer below is added to the bottom of outgoing emails. Clear both fields to inherit the global default.
+                The footer below is added to the bottom of outgoing emails.
               </span>
             </span>
           </label>
