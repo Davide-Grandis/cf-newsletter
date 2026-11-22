@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
@@ -17,17 +18,34 @@ const button = 'rounded border border-slate-300 px-3 py-2 text-sm disabled:opaci
 const primary = 'rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900';
 const card = 'rounded-lg border border-slate-200 p-4 space-y-4 dark:border-slate-700';
 
+// Release notices can be dismissed per version; a newer release shows again.
+// An active or failed update job is never dismissible.
+const DISMISSED_RELEASE_KEY = 'update-notice-dismissed-version';
+
 export function UpdateNotice() {
   const me = useIdentity();
   const query = useQuery({
     queryKey: ['updates'], queryFn: () => api<Status>('/api/updates'),
     enabled: me.data?.role === 'super_admin', staleTime: 5 * 60_000, retry: false,
   });
-  if (!query.data?.release?.newer && !query.data?.activeJob) return null;
-  return <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-    <Link to="/settings?tab=updates" className="underline underline-offset-2">
-      {query.data.activeJob ? 'An application update is active or needs attention.' : `cf-newsletter ${query.data.release?.version} is available.`} View updates
-    </Link>
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISSED_RELEASE_KEY));
+  const job = query.data?.activeJob;
+  const version = query.data?.release?.newer ? query.data.release.version : null;
+  if (!job && (!version || dismissed === version)) return null;
+  const dismiss = () => {
+    if (!version) return;
+    localStorage.setItem(DISMISSED_RELEASE_KEY, version);
+    setDismissed(version);
+  };
+  return <div className="relative flex items-center justify-center border-b border-amber-200 bg-amber-50 px-10 py-2 text-center text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+    {!job && (
+      <button type="button" onClick={dismiss} aria-label="Dismiss" title="Dismiss"
+        className="absolute left-4 text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-200">✕</button>
+    )}
+    <span>
+      {job ? 'An application update is active or needs attention.' : `cf-newsletter ${version} is available.`}{' '}
+      <Link to="/settings?tab=updates" className="underline underline-offset-2">View updates</Link>
+    </span>
   </div>;
 }
 
