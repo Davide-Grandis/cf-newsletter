@@ -259,9 +259,8 @@ be turned off. On a newsletter's **Footer** tab choose how it is provided:
 
 If `{{unsubscribe_url}}` is missing from a part — from the footer in the first
 mode, or from the incoming email in the second — an unsubscribe line is
-appended to that part automatically. The Footer tab shows a red warning when
-this happens: for the configured footer as you edit it, and in incoming mode
-for the last email received by the newsletter.
+appended to that part automatically. In **Add footer** mode the Footer tab
+shows a red warning as you edit a footer that lacks it.
 
 - **Global default** — set under **Settings → Email sending → Default footer**
   (`DEFAULT_FOOTER_HTML` / `DEFAULT_FOOTER_TEXT`). Used for any newsletter that

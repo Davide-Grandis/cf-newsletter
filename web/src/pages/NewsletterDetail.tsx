@@ -11,7 +11,6 @@ import { LocalPartInput, localPart } from './Newsletters';
 import { MailMergeEditor, type MailMergeUpdate } from '../components/MailMergeEditor';
 import { TrackingEditor } from '../components/TrackingEditor';
 import { hasUnsubscribePlaceholder, renderFooterHtml, renderFooterText } from '../../../shared/footer';
-import { fmtDate } from '../utils/date';
 
 type Tab = 'subscribers' | 'authors' | 'admins' | 'mail-merge' | 'footer' | 'signup' | 'tracking';
 
@@ -639,7 +638,7 @@ function FooterEditor({
   const previewDoc = useMemo(() => buildFooterPreview(effectiveHtml, n.name), [effectiveHtml, n.name]);
 
   const missingParts = incoming
-    ? [n.last_campaign_footer?.missing_html && 'HTML', n.last_campaign_footer?.missing_text && 'plain-text'].filter(Boolean)
+    ? []
     : [!hasUnsubscribePlaceholder(effectiveHtml) && 'HTML', !hasUnsubscribePlaceholder(effectiveText) && 'plain-text'].filter(Boolean);
   const missingLabel = missingParts.length === 2 ? 'the HTML and plain-text parts' : `the ${missingParts[0]} part`;
 
@@ -669,7 +668,9 @@ function FooterEditor({
       <div>
         <h2 className="text-sm font-medium text-slate-900 dark:text-slate-100">Email footer</h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Every email carries a footer with an unsubscribe link. Use {tokens}. If{' '}
+          Every email carries a footer with an unsubscribe link.
+          <br />
+          Use {tokens}. If{' '}
           <code className="bg-slate-100 px-1 rounded dark:bg-slate-800">{'{{unsubscribe_url}}'}</code> is missing, an
           unsubscribe link is added automatically.
         </p>
@@ -715,19 +716,8 @@ function FooterEditor({
 
       {missingParts.length > 0 && (
         <p role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
-          {incoming ? (
-            <>
-              The last email received
-              {n.last_campaign_footer ? <> (&ldquo;{n.last_campaign_footer.subject}&rdquo;, {fmtDate(n.last_campaign_footer.created_at)})</> : null}{' '}
-              has no <code>{'{{unsubscribe_url}}'}</code> in {missingLabel}, so an unsubscribe link was added at the bottom.
-              Add it to the emails you send to this newsletter.
-            </>
-          ) : (
-            <>
-              The footer has no <code>{'{{unsubscribe_url}}'}</code> in {missingLabel}, so an unsubscribe link is added at the
-              bottom automatically.
-            </>
-          )}
+          The footer has no <code>{'{{unsubscribe_url}}'}</code> in {missingLabel}, so an unsubscribe link is added at the
+          bottom automatically.
         </p>
       )}
 

@@ -24,7 +24,7 @@ import {
   type WarmupState,
 } from '../../../shared/warmup';
 import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
-import { hasUnsubscribePlaceholder, sanitizeFooterHtml } from '../../../shared/footer';
+import { sanitizeFooterHtml } from '../../../shared/footer';
 import { sanitizeMailMergeHtml, MAIL_MERGE_HTML_MAX, MAIL_MERGE_TEXT_MAX } from '../../../shared/mail-merge';
 import {
   consoleSender,
@@ -1250,17 +1250,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           .bind(nid)
           .first();
         if (!row) return Response.json({ error: 'not found' }, { status: 404 });
-        const last = await env.DB
-          .prepare('SELECT subject, html, text, created_at FROM campaigns WHERE newsletter_id = ? ORDER BY created_at DESC LIMIT 1')
-          .bind(nid)
-          .first<{ subject: string; html: string | null; text: string | null; created_at: string }>();
-        const last_campaign_footer = last && {
-          subject: last.subject,
-          created_at: last.created_at,
-          missing_html: !hasUnsubscribePlaceholder(last.html?.trim() ? last.html : last.text),
-          missing_text: !hasUnsubscribePlaceholder(last.text),
-        };
-        return Response.json({ ...row, last_campaign_footer });
+        return Response.json(row);
       }
       if (m === 'PATCH') {
         const body = await req.json<{

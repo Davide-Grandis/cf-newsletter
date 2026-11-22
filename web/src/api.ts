@@ -90,7 +90,6 @@ export interface Newsletter {
   footer_html?: string | null;
   footer_text?: string | null;
   footer_incoming?: 0 | 1;
-  last_campaign_footer?: { subject: string; created_at: string; missing_html: boolean; missing_text: boolean } | null;
   // Public subscribe slug (used in /subscribe/<slug>) and the per-newsletter
   // switch that enables the public signup page. slug may be null on legacy rows.
   slug?: string | null;
