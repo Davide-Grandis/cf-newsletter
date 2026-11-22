@@ -1,7 +1,7 @@
 import { WorkerEntrypoint, WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
 import {
   UPDATER_VERSION, PRODUCT_WORKERS, compareVersions, githubRelease,
-  releaseDigest, verifiedArtifact, type GitHubRelease, type ReleaseArtifact,
+  releaseDigest, verifiedArtifact, type GitHubRelease, type ReleaseArtifact, type ReleaseSource,
 } from '../../../shared/update-release';
 import {
   bindingQuery, decryptCredential, finishJob, jobById, updateEvent, updateIntentId, UPDATE_INTENT_TTL_MS, type Query,
@@ -32,9 +32,9 @@ async function publicJob(query: Query, id: string): Promise<Record<string, unkno
   return { ...job, release_id: releaseId, events: events.reverse() };
 }
 
-async function selected(id: number, digest: string, githubToken?: string): Promise<{ release: GitHubRelease; artifact: ReleaseArtifact }> {
+async function selected(id: number, digest: string, source: ReleaseSource): Promise<{ release: GitHubRelease; artifact: ReleaseArtifact }> {
   if (!Number.isSafeInteger(id) || !/^[a-f0-9]{64}$/.test(digest)) throw new Error('The update job has no pinned release.');
-  const release = await githubRelease(`/${id}`, githubToken);
+  const release = await githubRelease(`/${id}`, source);
   if (release.prerelease || releaseDigest(release) !== digest) throw new Error('The selected release changed or is not stable. Check for updates again.');
   const verified = await verifiedArtifact(release);
   if (!release.published_at || !Number.isFinite(Date.parse(release.published_at))) throw new Error('Release publication date is unavailable.');
@@ -46,6 +46,12 @@ function installerOrigin(configured?: string): string {
   const url = new URL(configured);
   if (url.protocol !== 'https:' || url.origin !== configured.replace(/\/$/, '')) throw new Error('The configured installer origin is invalid.');
   return url.origin;
+}
+
+// An optional GITHUB_TOKEN calls GitHub directly; otherwise release metadata is
+// read through the hosted installer (see githubRelease).
+function releaseSource(env: { GITHUB_TOKEN?: string; INSTALLER_ORIGIN?: string }): ReleaseSource {
+  return { token: env.GITHUB_TOKEN || undefined, installerOrigin: installerOrigin(env.INSTALLER_ORIGIN) };
 }
 
 function nonce(): string {
@@ -68,7 +74,7 @@ export class Updater extends WorkerEntrypoint<UpdaterBindings> {
       if (claim.length) {
         checkedAt = Number(claim[0]!.checked_at);
         try {
-          const release = await githubRelease('/latest', this.env.GITHUB_TOKEN);
+          const release = await githubRelease('/latest', releaseSource(this.env));
           if (release.prerelease) throw new Error('No stable release is available.');
           releaseDigest(release);
           data = { release };
@@ -161,7 +167,7 @@ export class UpdateWorkflow extends WorkflowEntrypoint<UpdaterBindings, JobParam
         const token = await decryptCredential(job, this.env.UPDATE_PRIVATE_KEY);
         const release = JSON.parse(job.release_json) as GitHubRelease;
         const object = await this.env.ARCHIVE.get(`_updates/${id}/artifact.json`);
-        const artifact = object ? await object.json<ReleaseArtifact>() : (await selected(release.id, job.digest, this.env.GITHUB_TOKEN)).artifact;
+        const artifact = object ? await object.json<ReleaseArtifact>() : (await selected(release.id, job.digest, releaseSource(this.env))).artifact;
         if (!object) await this.env.ARCHIVE.put(`_updates/${id}/artifact.json`, JSON.stringify(artifact));
         await action(token, artifact, release);
       });

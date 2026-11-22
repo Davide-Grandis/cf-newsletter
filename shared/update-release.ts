@@ -1,4 +1,4 @@
-export const UPDATER_VERSION = '1.1.0';
+export const UPDATER_VERSION = '1.1.1';
 export const PRODUCT_WORKERS = ['ingest', 'consumer', 'tracker', 'bounce', 'cleanup', 'admin'] as const;
 export type ProductWorker = typeof PRODUCT_WORKERS[number];
 
@@ -93,18 +93,71 @@ export async function boundedBytes(response: Response, maximum: number): Promise
   return bytes.buffer;
 }
 
-export async function githubRelease(path = '/latest', token?: string): Promise<GitHubRelease> {
-  if (!/^\/(?:latest|\d+|tags\/v[\w.-]+)$/.test(path)) throw new Error('Invalid release selection.');
+// Where release metadata comes from. Anonymous GitHub API calls are limited per
+// egress IP, and Workers share Cloudflare's egress IPs, so installations
+// without their own token read release metadata through the hosted installer,
+// which calls GitHub with its own token. The installer is only a metadata relay:
+// the result is validated like a direct GitHub response, the artifact URL must
+// be the GitHub release download URL, and verifiedArtifact() downloads the
+// artifact from GitHub and checks it against the SHA-256 digest.
+export interface ReleaseSource { token?: string; installerOrigin?: string }
+
+async function githubDirect(path: string, token?: string): Promise<GitHubRelease> {
   const response = await fetch(`${RELEASES}${path}`, {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'cf-newsletter-updater', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok) throw new Error(`GitHub release check unavailable (HTTP ${response.status}). Retry later.`);
-  const release = JSON.parse(new TextDecoder().decode(await boundedBytes(response, 512 * 1024))) as GitHubRelease;
-  if (!Number.isSafeInteger(release.id) || release.draft || !/^v\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(release.tag_name)) {
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { message?: unknown };
+    const remaining = response.headers.get('x-ratelimit-remaining');
+    const reset = Number(response.headers.get('x-ratelimit-reset'));
+    const detail = [
+      typeof body.message === 'string' ? body.message.slice(0, 160) : '',
+      remaining === '0' && Number.isFinite(reset) && reset > 0 ? `rate limit resets at ${new Date(reset * 1000).toISOString()}` : '',
+    ].filter(Boolean).join('; ');
+    throw new Error(`GitHub release check unavailable (HTTP ${response.status}${detail ? `: ${detail}` : ''}). Retry later.`);
+  }
+  return JSON.parse(new TextDecoder().decode(await boundedBytes(response, 512 * 1024))) as GitHubRelease;
+}
+
+async function viaInstaller(origin: string, path: string): Promise<GitHubRelease> {
+  const response = await fetch(`${origin}/api/releases${path}`, {
+    headers: { Accept: 'application/json', 'User-Agent': 'cf-newsletter-updater' },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: unknown };
+    throw new Error(`HTTP ${response.status}${typeof body.error === 'string' ? `: ${body.error.slice(0, 200)}` : ''}`);
+  }
+  return JSON.parse(new TextDecoder().decode(await boundedBytes(response, 512 * 1024))) as GitHubRelease;
+}
+
+function checkedRelease(release: GitHubRelease): GitHubRelease {
+  if (!release || !Number.isSafeInteger(release.id) || release.draft || typeof release.tag_name !== 'string' ||
+      !/^v\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(release.tag_name) || !Array.isArray(release.assets)) {
     throw new Error('Invalid or unpublished product release.');
   }
   return release;
+}
+
+/**
+ * Fetch release metadata (`/latest`, `/<id>` or `/tags/vX.Y.Z`). With a token,
+ * GitHub is called directly. Otherwise `/latest` and `/<id>` go through the
+ * installer first and fall back to anonymous GitHub if the installer fails.
+ */
+export async function githubRelease(path = '/latest', source: string | ReleaseSource = {}): Promise<GitHubRelease> {
+  if (!/^\/(?:latest|\d+|tags\/v[\w.-]+)$/.test(path)) throw new Error('Invalid release selection.');
+  const { token, installerOrigin } = typeof source === 'string' ? { token: source, installerOrigin: undefined } : source;
+  if (token || !installerOrigin || path.startsWith('/tags/')) return checkedRelease(await githubDirect(path, token));
+  try {
+    return checkedRelease(await viaInstaller(installerOrigin, path));
+  } catch (relayError) {
+    try {
+      return checkedRelease(await githubDirect(path));
+    } catch (directError) {
+      throw new Error(`${(directError as Error).message} The installer release lookup also failed (${(relayError as Error).message}).`);
+    }
+  }
 }
 
 export async function sha256(bytes: ArrayBuffer): Promise<string> {

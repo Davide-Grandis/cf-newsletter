@@ -86,6 +86,18 @@ PRODUCT_ROOT=/path/to/app npm run sync:updates and verify with --check.
 
 No GitHub account or token is required for customers. Release checks are cached
 for six hours, with manual refresh limited to once per minute. GitHub failures
-are reported as unavailable, never as "up to date"; an optional read-only
-GITHUB_TOKEN secret may be configured on the updater to mitigate shared-egress
-rate limits.
+are reported as unavailable, never as "up to date".
+
+Anonymous GitHub API calls are limited per IP address, and Workers share
+Cloudflare's egress IPs, so an installation calling GitHub directly can get
+HTTP 403 even when it rarely checks. Since updater engine 1.1.1, the updater
+reads release metadata (the latest release and the release pinned by an update
+job) from the hosted installer's `GET /api/releases/latest` and
+`GET /api/releases/<id>`, which call GitHub with the installer's token and are
+edge-cached for five minutes and one hour respectively. The installer only
+relays metadata: the updater validates it exactly like a GitHub response,
+requires the artifact URL to be the GitHub release download URL, downloads the
+artifact from GitHub and checks it against the SHA-256 digest. If the installer
+lookup fails, the updater falls back to anonymous GitHub, and the error shows
+GitHub's message and rate-limit reset time. An optional read-only GITHUB_TOKEN
+secret on the updater still makes it call GitHub directly with that token.
