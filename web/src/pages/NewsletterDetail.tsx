@@ -534,7 +534,7 @@ function Settings({
           </div>
           <div className="min-w-0">
             <label className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Sender <span className="normal-case tracking-normal text-slate-400">(optional)</span>
+              Sender
             </label>
             <LocalPartInput
               value={localPart(n.from_address ?? '')}
