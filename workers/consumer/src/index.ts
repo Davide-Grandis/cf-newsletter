@@ -1,5 +1,5 @@
 import { EmailMessage } from 'cloudflare:email';
-import { buildEmail, estimateRawSize, formatListId, type AttachmentPart } from '../../../shared/mime';
+import { buildEmail, estimateRawSize, formatListId, textToHtml, type AttachmentPart } from '../../../shared/mime';
 import { getAttachmentBytes } from '../../../shared/attachments';
 import {
   getCampaign,
@@ -209,7 +209,10 @@ export default {
           try {
             const mergeIncoming = campaign.mail_merge_incoming === 1;
             const vars = { first_name: r.first_name, last_name: r.last_name };
-            let body = { html: campaign.html ?? '', text: campaign.text ?? '' };
+            // Campaigns authored in plain text get an HTML body derived from the
+            // text, so HTML-preferring clients don't show an empty message.
+            const sourceHtml = campaign.html?.trim() ? campaign.html : textToHtml(campaign.text ?? '');
+            let body = { html: sourceHtml, text: campaign.text ?? '' };
             if (mergeIncoming) body = applyMailMerge(campaign, vars, body.html, body.text);
             let html = await renderRecipientHtml(env, { ...campaign, html: body.html }, allAtts, r.subscriberId, consents.has(r.subscriberId));
             let text = body.text;

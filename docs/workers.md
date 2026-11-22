@@ -153,7 +153,12 @@ if (estimate > Number(env.MAX_RAW_BYTES)) throw new Error(`message too large`);
 Failing fast here is cheaper than letting `SEND_EMAIL` reject every
 recipient individually.
 
-**3. Per recipient: render personalized HTML.** `renderRecipientHtml`:
+**3. Per recipient: render personalized HTML.** If the campaign was authored
+in plain text only (no HTML part), the HTML body is derived from the text with
+`textToHtml()` (`shared/mime.ts`: escaped, blank lines become paragraphs, line
+breaks become `<br>`); otherwise HTML-preferring mail clients would show an
+empty message with just the footer. The stored campaign is unchanged.
+`renderRecipientHtml` then:
 - if `link_mode`, appends an `<ul>` of `<a>` links to signed download
   URLs (`/a/:campaign/:sub/:attId?sig=...`) — each URL is HMAC-signed
   with `ATTACHMENT_SIGNING_KEY` so subscriber A cannot fetch subscriber

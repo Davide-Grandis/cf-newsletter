@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildEmail, formatAddress, formatEmailDate, formatListId, parseAddress, sanitizeDisplayName } from '../shared/mime';
+import { buildEmail, formatAddress, formatEmailDate, formatListId, parseAddress, sanitizeDisplayName, textToHtml } from '../shared/mime';
+import { applyMailMerge } from '../shared/mail-merge';
 import { mailtoUnsubscribeAddress, mailtoTokenMatches, parseMailtoUnsubscribe } from '../shared/tracking';
 
 const headersOf = (raw: string) => raw.split('\r\n\r\n')[0]!;
@@ -109,4 +110,26 @@ test('List-Id uses the stable newsletter id and a safe description', () => {
   const line = head.split('\r\n').find((l) => l.startsWith('List-Id:'))!;
   assert.match(line, /<default\.example\.com>$/);
   assert.doesNotMatch(head, /^Bcc:/m);
+});
+
+test('plain-text campaigns get an escaped HTML body with paragraphs and line breaks', () => {
+  const text = 'Hello {{first_name}},\r\n\r\nLine one\nLine <two> & "three"\n\n\n  \nhttps://example.com/a?b=1&c=2\n';
+  assert.equal(
+    textToHtml(text),
+    '<p>Hello {{first_name}},</p>\n<p>Line one<br>\nLine &lt;two&gt; &amp; &quot;three&quot;</p>\n<p>https://example.com/a?b=1&amp;c=2</p>',
+  );
+  assert.equal(textToHtml(''), '');
+  assert.equal(textToHtml('\n\n  \n'), '');
+});
+
+test('a text-only campaign renders a non-empty, personalised HTML part', () => {
+  const html = applyMailMerge(
+    { mail_merge_enabled: 1, mail_merge_incoming: 1, mail_merge_html: null, mail_merge_text: null },
+    { first_name: 'Jane', last_name: '<Doe>' },
+    textToHtml('Hi {{full_name}}\n\nNews'),
+    '',
+  ).html;
+  assert.equal(html, '<p>Hi Jane &lt;Doe&gt;</p>\n<p>News</p>');
+  const raw = buildEmail({ ...base, to: 'x@example.com', text: 'Hi\n\nNews', html: textToHtml('Hi\n\nNews') });
+  assert.match(raw.split('text/html; charset=UTF-8')[1]!, /<p>Hi<\/p>/);
 });

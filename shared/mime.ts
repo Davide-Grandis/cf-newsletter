@@ -118,6 +118,23 @@ function renderPhrase(display: string, separator?: string): string {
 }
 
 /**
+ * HTML body for a campaign authored in plain text only. Mail clients prefer
+ * the HTML alternative, so without this they would show an empty message with
+ * just the footer. Text is escaped; blank lines become paragraphs and single
+ * line breaks become <br>.
+ */
+export function textToHtml(text: string): string {
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split(/\n(?:[ \t]*\n)+/)
+    .map((p) => p.replace(/^\n+|\n+$/g, ''))
+    .filter((p) => p.trim() !== '')
+    .map((p) => `<p>${esc(p).replace(/\n/g, '<br>\n')}</p>`)
+    .join('\n');
+}
+
+/**
  * RFC 2919 List-Id value: an optional description phrase plus a stable,
  * globally unique identifier `<listId>.<domain>`. Use an immutable id (not a
  * renameable name or slug) so mail filters keep matching the list.
