@@ -135,6 +135,14 @@ redelivered message never sends twice.
 
 Every invocation that handles a message runs the dispatcher once at the end.
 
+While a campaign is in progress (`status = 'sending'`, possibly for days) its
+`delivery_state` column records `sending` while one of its batches is out for
+delivery, `scheduled` while the rest waits for a later day's budget or a retry,
+and `paused` while sending is held after an account-level error
+(`refreshDeliveryStates()`, run after every dispatcher run and every batch). Ingest
+sets it to `scheduled`; completion clears it. The console shows it as the
+campaign's status.
+
 ### Dispatcher (`shared/dispatch.ts → dispatch()`)
 
 1. Takes a 60 s lease on `dispatch_state`, so concurrent consumers can't

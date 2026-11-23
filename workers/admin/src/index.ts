@@ -82,6 +82,13 @@ export interface Env {
   SEND_EMAIL?: SendEmail; // Cloudflare Email Sending binding
 }
 
+// Displayed campaign status: an in-progress campaign (status 'sending', which
+// can last days, see shared/dispatch.ts) shows its delivery_state: 'sending'
+// while a batch is out for delivery, 'scheduled' while the rest waits for a
+// later day's budget or a retry, 'paused' after an account-level send error.
+const CAMPAIGN_STATUS_SQL =
+  "CASE WHEN c.status = 'sending' AND c.delivery_state IS NOT NULL THEN c.delivery_state ELSE c.status END";
+
 const BRANDING_LOGO_KEY = 'branding/logo';
 const MAX_BRANDING_LOGO_BYTES = 256 * 1024;
 
@@ -1957,7 +1964,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     const [page, count] = await Promise.all([
       env.DB
         .prepare(
-          `SELECT c.id, c.newsletter_id, n.name AS newsletter_name, c.subject, c.status, ` +
+          `SELECT c.id, c.newsletter_id, n.name AS newsletter_name, c.subject, ${CAMPAIGN_STATUS_SQL} AS status, c.delivery_state, ` +
             `c.total_recipients, c.sent_count, c.failed_count, ` +
             `c.attachment_count, c.link_mode, c.created_at, ` +
             `(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND s.status = 'bounced') AS bounce_count ` +
@@ -2003,7 +2010,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     if (m === 'GET' && !sub) {
       const campaign = await env.DB
         .prepare(
-          'SELECT c.id, c.newsletter_id, n.name AS newsletter_name, c.subject, c.status, ' +
+          `SELECT c.id, c.newsletter_id, n.name AS newsletter_name, c.subject, ${CAMPAIGN_STATUS_SQL} AS status, c.delivery_state, ` +
             'c.total_recipients, c.sent_count, c.failed_count, ' +
             'c.attachment_count, c.attachment_total_bytes, c.link_mode, c.sent_by, c.created_at, ' +
             // Delivery progress (shared/dispatch.ts): recipients released by the
@@ -2020,7 +2027,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       // (normally the next UTC midnight), or the end of an account-level pause.
       let nextReleaseAt: string | null = null;
       let dispatchPaused = false;
-      if (campaign.paused_count > 0 && campaign.status === 'sending') {
+      if (campaign.paused_count > 0 && ['sending', 'scheduled', 'paused'].includes(String(campaign.status))) {
         const state = await env.DB
           .prepare('SELECT next_tick_at, paused_until FROM dispatch_state WHERE id = 1')
           .first<{ next_tick_at: number | null; paused_until: number | null }>();
@@ -2099,7 +2106,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         .first<{ status: string }>();
       if (!camp) return Response.json({ error: 'not found' }, { status: 404 });
       if (camp.status === 'sending') {
-        return Response.json({ error: 'cannot delete a campaign that is still sending' }, { status: 409 });
+        return Response.json({ error: 'cannot delete a campaign that is still in progress' }, { status: 409 });
       }
       // Delete R2 objects before cascade removes the attachment rows.
       const atts = await env.DB

@@ -25,6 +25,7 @@ import {
   isLegacyMessage,
   isSendMessage,
   pauseDispatch,
+  refreshDeliveryStates,
   releaseBatch,
   retrySendLater,
   scheduleDispatch,
@@ -404,7 +405,9 @@ async function sendBatch(env: Env, cache: Map<string, CampaignEntry>, campaignId
     message: `Batch complete: ${sentInBatch} sent, ${failedInBatch} failed${retriedInBatch ? `, ${retriedInBatch} retrying later` : ''}`,
     detail: { sent: sentInBatch, failed: failedInBatch, retrying: retriedInBatch },
   });
-  // Once every recipient has been processed, mark the campaign sent.
+  // Once every recipient has been processed, mark the campaign sent; otherwise
+  // it is now scheduled (or paused) until the dispatcher releases more.
+  await refreshDeliveryStates(env.DB);
   if (await markCampaignCompleteIfDone(env.DB, campaignId)) {
     await writeLog(env.DB, {
       source: 'consumer',

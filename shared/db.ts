@@ -79,7 +79,7 @@ export async function markCampaignCompleteIfDone(
 ): Promise<boolean> {
   const res = await db
     .prepare(
-      "UPDATE campaigns SET status = 'done' " +
+      "UPDATE campaigns SET status = 'done', delivery_state = NULL " +
         "WHERE id = ? AND status = 'sending' AND total_recipients > 0 " +
         'AND sent_count + failed_count >= total_recipients',
     )

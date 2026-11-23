@@ -253,9 +253,10 @@ export default {
 
     await env.DB
       .prepare(
-        "UPDATE campaigns SET total_recipients = ?, status = CASE WHEN ? = 0 AND status = 'sending' THEN 'done' ELSE status END WHERE id = ?",
+        "UPDATE campaigns SET total_recipients = ?, status = CASE WHEN ? = 0 AND status = 'sending' THEN 'done' ELSE status END, " +
+          "delivery_state = CASE WHEN ? > 0 THEN 'scheduled' END WHERE id = ?",
       )
-      .bind(total, total, campaignId)
+      .bind(total, total, total, campaignId)
       .run();
     if (total > 0) await markCampaignCompleteIfDone(env.DB, campaignId);
     await writeLog(env.DB, {

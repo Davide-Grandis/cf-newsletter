@@ -141,6 +141,25 @@ export async function pauseDispatch(db: D1Database, untilMs: number, reason: str
 }
 
 /**
+ * Record each in-progress campaign's delivery state (`campaigns.delivery_state`):
+ * 'sending' while one of its batches is out for delivery, else 'scheduled' while
+ * recipients wait for a later day's budget or a retry, or 'paused' while sending
+ * is held after an account-level error. Called whenever claims change.
+ */
+export async function refreshDeliveryStates(db: D1Database, now = Date.now()): Promise<void> {
+  await db
+    .prepare(
+      "UPDATE campaigns SET delivery_state = CASE " +
+        "WHEN EXISTS (SELECT 1 FROM sends s WHERE s.campaign_id = campaigns.id AND s.status = 'pending' AND s.batch_id IS NOT NULL) THEN 'sending' " +
+        "WHEN EXISTS (SELECT 1 FROM sends s WHERE s.campaign_id = campaigns.id AND s.status = 'pending') THEN " +
+        "CASE WHEN COALESCE((SELECT paused_until FROM dispatch_state WHERE id = 1), 0) > ? THEN 'paused' ELSE 'scheduled' END " +
+        "ELSE delivery_state END WHERE status = 'sending'",
+    )
+    .bind(now)
+    .run();
+}
+
+/**
  * Claim due pending rows within the budget and enqueue one message per batch,
  * then schedule the next run: the next window when the budget is spent, the
  * earliest retry when only backed-off rows remain, or none when idle.
@@ -161,6 +180,7 @@ export async function dispatch(deps: DispatchDeps, budget: DispatchBudget, now =
     const state = await db.prepare('SELECT paused_until FROM dispatch_state WHERE id = 1').first<{ paused_until: number | null }>();
     if (state?.paused_until && state.paused_until > now) {
       const nextTickAt = await scheduleDispatch(deps, state.paused_until, now);
+      await refreshDeliveryStates(db, now);
       return { ran: false, batches: 0, claimed: 0, remaining: 0, nextTickAt, reason: 'paused' };
     }
 
@@ -241,6 +261,7 @@ export async function dispatch(deps: DispatchDeps, budget: DispatchBudget, now =
         if (retry?.at) nextTickAt = await scheduleDispatch(deps, sqlTimeMs(retry.at), now);
       }
     }
+    await refreshDeliveryStates(db, now);
     return { ran: true, batches: messages.length, claimed, remaining, nextTickAt };
   } finally {
     await db.prepare('UPDATE dispatch_state SET locked_until = NULL WHERE id = 1 AND locked_until = ?').bind(lease).run();

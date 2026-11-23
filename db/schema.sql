@@ -107,7 +107,12 @@ CREATE TABLE IF NOT EXISTS campaigns (
   failed_count            INTEGER NOT NULL DEFAULT 0,
   attachment_count        INTEGER NOT NULL DEFAULT 0,
   attachment_total_bytes  INTEGER NOT NULL DEFAULT 0,
-  link_mode               INTEGER NOT NULL DEFAULT 0
+  link_mode               INTEGER NOT NULL DEFAULT 0,
+  -- While status = 'sending' (in progress, possibly for days): 'sending' while a
+  -- batch is out for delivery, 'scheduled' while the rest waits for a later
+  -- day's sending budget or a retry, 'paused' while sending is held after an
+  -- account-level send error. Maintained by shared/dispatch.ts; NULL otherwise.
+  delivery_state          TEXT CHECK (delivery_state IN ('sending','scheduled','paused'))
 );
 CREATE INDEX IF NOT EXISTS idx_campaigns_newsletter ON campaigns(newsletter_id);
 

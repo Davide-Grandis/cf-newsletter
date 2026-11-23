@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api, CampaignDetail as Detail, Page, Send, TimeseriesRow } from '../api';
 import { StatusPill } from './Subscribers';
-import { CampaignStatus } from './Campaigns';
+import { ACTIVE_CAMPAIGN_STATUSES, CampaignStatus } from './Campaigns';
 import { PAGE_SIZE, Pagination } from '../components/Pagination';
 import { useState, type ReactNode } from 'react';
 import { RefreshIcon } from './Dashboard';
@@ -22,7 +22,7 @@ export default function CampaignDetail() {
     queryKey: ['campaign', id],
     queryFn: () => api<Detail>(`/api/campaigns/${id}`),
     // Keep delivery progress current while the campaign is being sent.
-    refetchInterval: (q) => (q.state.data?.campaign.status === 'sending' ? 30_000 : false),
+    refetchInterval: (q) => (ACTIVE_CAMPAIGN_STATUSES.includes(q.state.data?.campaign.status ?? '') ? 30_000 : false),
   });
   const ts = useQuery({
     queryKey: ['campaign-ts', id],
@@ -59,7 +59,7 @@ export default function CampaignDetail() {
           </div>
         </div>
         <div className="ml-auto mt-1 flex items-center gap-2">
-          {isSuper && status && status !== 'sending' && (
+          {isSuper && status && !ACTIVE_CAMPAIGN_STATUSES.includes(status) && (
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
@@ -157,7 +157,7 @@ function DeliveryProgress({ campaign }: { campaign: Detail['campaign'] }) {
   const released = campaign.released_count ?? 0;
   const paused = campaign.paused_count ?? 0;
   if (released + paused === 0) return null;
-  const sending = campaign.status === 'sending';
+  const sending = ACTIVE_CAMPAIGN_STATUSES.includes(campaign.status);
   const next = campaign.next_release_at ? fmtDate(campaign.next_release_at) : '';
   return (
     <div className="space-y-2">

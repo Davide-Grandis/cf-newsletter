@@ -15,7 +15,11 @@ address; the pipeline validates, archives and fans it out to subscribers.
   waiting for a later day's sending budget, set by warmup and the Cloudflare
   quota, or for a retry after a temporary error), with when the next share is
   released. Both update as each day's share is sent; the **Pending** filter
-  lists the paused recipients.
+  lists the paused recipients. A campaign that hasn't finished shows as
+  **sending** only while a batch is out for delivery, **scheduled** while the
+  rest waits for a later day's budget (or a retry), and **paused** while
+  sending is held after a Cloudflare sending limit or account error.
+  **Started at** is when the campaign began, in your local time.
 - **Bounces** — recent hard/soft bounces.
 - **Settings** — global runtime configuration (sending identity, domains, limits). The **Email sending** tab also shows live **Sending usage**: the account's daily quota, emails sent, the current warmup week and the weekly progression. See *Initial setup*.
 - **Help** — this document.

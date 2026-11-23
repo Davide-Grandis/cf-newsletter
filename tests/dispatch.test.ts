@@ -59,7 +59,7 @@ function fixture(opts: { dailyCap?: number; batchSize?: number } = {}) {
   };
   const ingest = async (campaignId = 'c1') => {
     const total = await createPendingSends(db, campaignId, 'nl');
-    sqlite.prepare('UPDATE campaigns SET total_recipients = ? WHERE id = ?').run(total, campaignId);
+    sqlite.prepare("UPDATE campaigns SET total_recipients = ?, delivery_state = CASE WHEN ? > 0 THEN 'scheduled' END WHERE id = ?").run(total, total, campaignId);
     queued.push({ body: { kind: 'dispatch' }, delaySeconds: 30 });
     return total;
   };
@@ -252,4 +252,39 @@ test('the campaign details report how many recipients were released for delivery
   await f.nextDay();
   const done = await progress();
   assert.deepEqual({ released: done.released, paused: done.paused, next: done.next }, { released: 8, paused: 0, next: null });
+});
+
+test('the campaign stores its delivery state: sending only while a batch is out, otherwise scheduled or paused', async () => {
+  const f = fixture({ dailyCap: 3, batchSize: 3 });
+  f.sqlite.exec("INSERT INTO admins (email, role, capability) VALUES ('root@example.com', 'super_admin', 'edit')");
+  f.addSubscribers(6);
+  await f.ingest();
+  const call = async (path: string) => {
+    const res = await admin.fetch(new Request(`https://console.example.com${path}`, {
+      headers: { 'cf-access-authenticated-user-email': 'root@example.com' },
+    }), { DB: f.db } as AdminEnv, {} as ExecutionContext);
+    assert.equal(res.status, 200);
+    return res.json() as Promise<Record<string, any>>;
+  };
+  const state = async () => {
+    const stored = f.row("SELECT status, delivery_state FROM campaigns WHERE id = 'c1'");
+    return {
+      stored: `${stored.status}/${stored.delivery_state ?? '-'}`,
+      detail: (await call('/api/campaigns/c1')).campaign.status,
+      list: (await call('/api/campaigns')).items[0].status,
+    };
+  };
+  assert.deepEqual(await state(), { stored: 'sending/scheduled', detail: 'scheduled', list: 'scheduled' }, 'Before the first dispatch');
+  f.queued.length = 0;
+  await dispatch(f.env, { capacity: 3, batchSize: 3, nextWindowMs: Date.now() + 3_600_000 });
+  assert.deepEqual(await state(), { stored: 'sending/sending', detail: 'sending', list: 'sending' }, 'While a batch is out for delivery');
+  await f.drain();
+  assert.deepEqual(await state(), { stored: 'sending/scheduled', detail: 'scheduled', list: 'scheduled' }, 'Waiting for the next day\'s budget');
+  f.fail('s5@example.org', coded('E_RATE_LIMIT_EXCEEDED'));
+  await f.nextDay();
+  assert.deepEqual(await state(), { stored: 'sending/paused', detail: 'paused', list: 'paused' }, 'Held after an account-level send error');
+  f.clearFailures();
+  await f.nextDay();
+  assert.deepEqual(await state(), { stored: 'done/-', detail: 'done', list: 'done' });
+  assert.equal(f.delivered.length, 6);
 });

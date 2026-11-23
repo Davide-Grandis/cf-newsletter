@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { api, Campaign, Page } from '../api';
-import { fmtDate } from '../utils/date';
+import { fmtLocal } from '../utils/date';
 import { Tooltip } from '../components/Tooltip';
 import { PAGE_SIZE, Pagination } from '../components/Pagination';
 import { RefreshIcon } from './Dashboard';
@@ -45,7 +45,7 @@ export default function Campaigns() {
                 <Th align="right" label="Sent" tip="Emails successfully accepted for delivery" className="px-4" />
                 <Th align="right" label="Failed" tip="Emails that failed to send" className="px-4" />
                 <Th align="right" label="Bounces" tip="Delivery failures reported by the receiving mail server (detected asynchronously)" className="px-4" />
-                <Th align="left" label="Sent at" tip="Date and time the campaign was created" className="px-4" />
+                <Th align="left" label="Started at" tip="When the campaign started, in your local time" className="px-4" />
               </tr>
             </thead>
             <tbody>
@@ -65,7 +65,7 @@ export default function Campaigns() {
                   <td className="px-4 py-2 text-right text-emerald-700 dark:text-emerald-400">{c.sent_count}</td>
                   <td className="px-4 py-2 text-right text-red-700 dark:text-red-400">{c.failed_count}</td>
                   <td className="px-4 py-2 text-right text-amber-700 dark:text-amber-400">{c.bounce_count || '—'}</td>
-                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{fmtDate(c.created_at)}</td>
+                  <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{fmtLocal(c.created_at)}</td>
                 </tr>
               ))}
               {data && data.items.length === 0 && (
@@ -108,12 +108,20 @@ function Th({ align = 'left', label, hint, tip, className = '' }: {
   );
 }
 
-// Coloured badge for a campaign's lifecycle status. Running campaigns
-// (`sending`) get an animated pulse so they stand out at a glance.
+// Statuses of a campaign that has not finished: `sending` while a batch is out
+// for delivery, `scheduled` while the rest waits for a later day's sending
+// budget (or a retry), `paused` while sending is held after a Cloudflare
+// sending limit or account error.
+export const ACTIVE_CAMPAIGN_STATUSES = ['sending', 'scheduled', 'paused'];
+
+// Coloured badge for a campaign's lifecycle status. Campaigns actually sending
+// get an animated pulse so they stand out at a glance.
 export function CampaignStatus({ status }: { status: string }) {
   const cls: Record<string, string> = {
     queued: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
     sending: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+    scheduled: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300',
+    paused: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
     done: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
     failed: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
   };

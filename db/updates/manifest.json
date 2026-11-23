@@ -58,5 +58,11 @@
     "file": "0010_send_dispatch.sql",
     "description": "Keep the send backlog in the database and dispatch it within the daily sending budget",
     "checkSql": "SELECT CASE WHEN (SELECT COUNT(*) FROM pragma_table_info('sends') WHERE name IN ('batch_id','claimed_at','attempts','next_attempt_at')) = 4 AND (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='dispatch_state') = 1 THEN 1 ELSE 0 END AS present"
+  },
+  {
+    "id": "0011_campaign_delivery_state",
+    "file": "0011_campaign_delivery_state.sql",
+    "description": "Record whether an in-progress campaign is sending, scheduled for a later day's budget, or paused",
+    "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('campaigns') WHERE name = 'delivery_state'"
   }
 ]

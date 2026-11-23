@@ -25,6 +25,20 @@ export function fmtDate(s: string | null | undefined): string {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}${tz ? ` ${tz}` : ''}`;
 }
 
+/** Date and time in the browser's own locale format and timezone, without a timezone label. */
+const localDateTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+/**
+ * Formats a SQLite datetime string (UTC) in the browser's locale format and
+ * timezone, e.g. "23 nov 2026, 20:32" (it-IT) or "Nov 23, 2026, 8:32 PM"
+ * (en-US), without a timezone label. Returns '' for null/undefined.
+ */
+export function fmtLocal(s: string | null | undefined): string {
+  if (!s) return '';
+  const d = toDate(s);
+  return d ? localDateTime.format(d) : '';
+}
+
 /**
  * Returns the UTC equivalent of a datetime string in "YYYY-MM-DD HH:MM UTC"
  * format, for use in tooltips alongside the local-time display.
