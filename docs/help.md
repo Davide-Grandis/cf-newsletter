@@ -9,7 +9,13 @@ address; the pipeline validates, archives and fans it out to subscribers.
 
 - **Dashboard** — subscriber/campaign/event overview.
 - **Newsletters** — create newsletters and manage each one's subscribers and authors.
-- **Campaigns** — every issue that has been ingested, with delivery stats.
+- **Campaigns** — every issue that has been ingested, with delivery stats. A
+  campaign's page shows **Released for delivery** (recipients handed to
+  delivery so far, on any day) and **Paused for later delivery** (recipients
+  waiting for a later day's sending budget, set by warmup and the Cloudflare
+  quota, or for a retry after a temporary error), with when the next share is
+  released. Both update as each day's share is sent; the **Pending** filter
+  lists the paused recipients.
 - **Bounces** — recent hard/soft bounces.
 - **Settings** — global runtime configuration (sending identity, domains, limits). The **Email sending** tab also shows live **Sending usage**: the account's daily quota, emails sent, the current warmup week and the weekly progression. See *Initial setup*.
 - **Help** — this document.

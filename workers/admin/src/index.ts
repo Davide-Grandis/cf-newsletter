@@ -2005,12 +2005,30 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         .prepare(
           'SELECT c.id, c.newsletter_id, n.name AS newsletter_name, c.subject, c.status, ' +
             'c.total_recipients, c.sent_count, c.failed_count, ' +
-            'c.attachment_count, c.attachment_total_bytes, c.link_mode, c.sent_by, c.created_at ' +
+            'c.attachment_count, c.attachment_total_bytes, c.link_mode, c.sent_by, c.created_at, ' +
+            // Delivery progress (shared/dispatch.ts): recipients released by the
+            // dispatcher so far (sent, failed, bounced or in a batch being sent),
+            // and those still waiting for a later day's budget or a retry.
+            "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND (s.status <> 'pending' OR s.batch_id IS NOT NULL)) AS released_count, " +
+            "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND s.status = 'pending' AND s.batch_id IS NULL) AS paused_count " +
             'FROM campaigns c LEFT JOIN newsletters n ON n.id = c.newsletter_id WHERE c.id = ?',
         )
         .bind(id)
-        .first();
+        .first<Record<string, unknown> & { paused_count: number }>();
       if (!campaign) return Response.json({ error: 'not found' }, { status: 404 });
+      // When paused recipients are next released: the dispatcher's scheduled run
+      // (normally the next UTC midnight), or the end of an account-level pause.
+      let nextReleaseAt: string | null = null;
+      let dispatchPaused = false;
+      if (campaign.paused_count > 0 && campaign.status === 'sending') {
+        const state = await env.DB
+          .prepare('SELECT next_tick_at, paused_until FROM dispatch_state WHERE id = 1')
+          .first<{ next_tick_at: number | null; paused_until: number | null }>();
+        dispatchPaused = (state?.paused_until ?? 0) > Date.now();
+        const at = Math.max(state?.next_tick_at ?? 0, dispatchPaused ? state!.paused_until! : 0);
+        nextReleaseAt = at > 0 ? new Date(at).toISOString() : null;
+      }
+      Object.assign(campaign, { next_release_at: nextReleaseAt, dispatch_paused: dispatchPaused });
       const events = await env.DB
         .prepare(
           'SELECT type, COUNT(*) AS n FROM events WHERE campaign_id = ? GROUP BY type',

@@ -52,5 +52,11 @@
     "file": "0009_newsletter_footer_incoming.sql",
     "description": "Choose between an added footer and a footer written in the incoming email",
     "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('newsletters') WHERE name = 'footer_incoming'"
+  },
+  {
+    "id": "0010_send_dispatch",
+    "file": "0010_send_dispatch.sql",
+    "description": "Keep the send backlog in the database and dispatch it within the daily sending budget",
+    "checkSql": "SELECT CASE WHEN (SELECT COUNT(*) FROM pragma_table_info('sends') WHERE name IN ('batch_id','claimed_at','attempts','next_attempt_at')) = 4 AND (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='dispatch_state') = 1 THEN 1 ELSE 0 END AS present"
   }
 ]

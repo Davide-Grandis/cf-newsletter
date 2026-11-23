@@ -51,43 +51,6 @@ export async function getCampaignAttachments(
 }
 
 /**
- * Async generator that yields every active subscriber, paginated by id.
- *
- * Used by the ingest worker to stream the recipient list without loading the
- * whole table into memory. Pagination uses keyset (`id > lastId ORDER BY id`)
- * which is stable under concurrent inserts and avoids the cost of `OFFSET`.
- * Only `status='active'` rows are yielded; unsubscribed/bounced/complained
- * subscribers are skipped automatically. Rows still pending double opt-in
- * confirmation (a non-null `confirm_token`, set by the public signup flow) are
- * also skipped so an unconfirmed signup never receives mail.
- *
- * @param newsletterId only yield subscribers belonging to this newsletter.
- * @param pageSize how many rows to fetch per D1 round-trip (default 1000).
- */
-export async function* iterateActiveSubscribers(
-  db: D1Database,
-  newsletterId: string,
-  pageSize = 1000,
-): AsyncGenerator<{ id: number; email: string; first_name: string | null; last_name: string | null; token: string }> {
-  let lastId = 0;
-  while (true) {
-    const { results } = await db
-      .prepare(
-        "SELECT id, email, first_name, last_name, token FROM subscribers " +
-          "WHERE newsletter_id = ? AND status='active' AND confirm_token IS NULL AND id > ? ORDER BY id ASC LIMIT ?",
-      )
-      .bind(newsletterId, lastId, pageSize)
-      .all<{ id: number; email: string; first_name: string | null; last_name: string | null; token: string }>();
-    if (!results || results.length === 0) return;
-    for (const row of results) {
-      yield row;
-      lastId = row.id;
-    }
-    if (results.length < pageSize) return;
-  }
-}
-
-/**
  * Return the ids, among `subscriberIds`, that have consented to open/click
  * tracking. Read at send time (not enqueue time) so a consent withdrawn while
  * a campaign is queued is honoured. Ids are passed as one JSON parameter to
@@ -100,64 +63,6 @@ export async function getTrackingConsents(db: D1Database, subscriberIds: number[
     .bind(JSON.stringify(subscriberIds))
     .all<{ id: number }>();
   return new Set((results ?? []).map((r) => r.id));
-}
-
-/**
- * Mark a (campaign, subscriber) send as successful and bump the campaign
- * counter, atomically via `db.batch`.
- *
- * Idempotent: relies on the `UNIQUE(campaign_id, subscriber_id)` constraint on
- * `sends` and an `ON CONFLICT` upsert, so retries from the queue don't create
- * duplicate rows. Any prior `error` is cleared and the new `message_id` is
- * recorded for later correlation with bounce reports.
- */
-export async function recordSendSuccess(
-  db: D1Database,
-  campaignId: string,
-  subscriberId: number,
-  messageId: string,
-): Promise<void> {
-  await db.batch([
-    db
-      .prepare(
-        "INSERT INTO sends (campaign_id, subscriber_id, status, sent_at, message_id) " +
-          "VALUES (?, ?, 'sent', datetime('now'), ?) " +
-          "ON CONFLICT(campaign_id, subscriber_id) DO UPDATE SET " +
-          "status='sent', sent_at=datetime('now'), message_id=excluded.message_id, error=NULL",
-      )
-      .bind(campaignId, subscriberId, messageId),
-    db
-      .prepare('UPDATE campaigns SET sent_count = sent_count + 1 WHERE id = ?')
-      .bind(campaignId),
-  ]);
-}
-
-/**
- * Mark a (campaign, subscriber) send as failed and bump the campaign
- * `failed_count`, atomically via `db.batch`.
- *
- * Like {@link recordSendSuccess}, this upserts on the unique
- * `(campaign_id, subscriber_id)` key so it is safe to call repeatedly. The
- * caller passes a short error string (e.g. the SEND_EMAIL exception message)
- * which is stored on the `sends` row for diagnostics.
- */
-export async function recordSendFailure(
-  db: D1Database,
-  campaignId: string,
-  subscriberId: number,
-  error: string,
-): Promise<void> {
-  await db.batch([
-    db
-      .prepare(
-        "INSERT INTO sends (campaign_id, subscriber_id, status, error) VALUES (?, ?, 'failed', ?) " +
-          "ON CONFLICT(campaign_id, subscriber_id) DO UPDATE SET status='failed', error=excluded.error",
-      )
-      .bind(campaignId, subscriberId, error),
-    db
-      .prepare('UPDATE campaigns SET failed_count = failed_count + 1 WHERE id = ?')
-      .bind(campaignId),
-  ]);
 }
 
 /**

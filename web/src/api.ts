@@ -117,6 +117,12 @@ export interface Campaign {
   created_at: string;
   attachment_total_bytes?: number;
   sent_by?: string;
+  // Campaign detail only: delivery progress. Released = handed to delivery so
+  // far (any day); paused = waiting for a later day's sending budget or a retry.
+  released_count?: number;
+  paused_count?: number;
+  next_release_at?: string | null;
+  dispatch_paused?: boolean;
 }
 
 export interface CampaignDetail {

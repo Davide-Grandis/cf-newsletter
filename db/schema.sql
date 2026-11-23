@@ -136,9 +136,32 @@ CREATE TABLE IF NOT EXISTS sends (
   sent_at        TEXT,
   error          TEXT,
   message_id     TEXT,
+  -- Dispatch (shared/dispatch.ts). Every recipient gets a 'pending' row at
+  -- ingest; the dispatcher claims due rows within the daily budget by setting
+  -- batch_id/claimed_at and enqueues one message per batch. A transient send
+  -- error releases the row (batch_id NULL) with attempts+1 and next_attempt_at.
+  batch_id        TEXT,
+  claimed_at      TEXT,
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT,
   UNIQUE (campaign_id, subscriber_id)
 );
 CREATE INDEX IF NOT EXISTS idx_sends_campaign_status ON sends(campaign_id, status);
+CREATE INDEX IF NOT EXISTS idx_sends_dispatch ON sends(status, batch_id, campaign_id);
+
+-- Singleton dispatcher state. next_tick_at: when the single scheduled dispatch
+-- message is due (ms), so only one is kept in the queue. locked_until: a short
+-- lease so concurrent consumers don't both spend the daily budget.
+-- paused_until/pause_reason: account-level send errors (rate or daily limit,
+-- sending not ready) pause all dispatching until that time (ms).
+CREATE TABLE IF NOT EXISTS dispatch_state (
+  id           INTEGER PRIMARY KEY CHECK (id = 1),
+  next_tick_at INTEGER,
+  locked_until INTEGER,
+  paused_until INTEGER,
+  pause_reason TEXT
+);
+INSERT OR IGNORE INTO dispatch_state (id) VALUES (1);
 
 -- Global post-send bounce-check counter. The GraphQL delivery-failure query is
 -- zone-wide (covers every campaign at once), so a single counter — not a

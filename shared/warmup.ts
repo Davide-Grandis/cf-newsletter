@@ -156,13 +156,3 @@ export function dayStartSql(now: Date): string {
   return toSqliteUtc(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
-/**
- * Seconds until the next UTC midnight (i.e. when the daily cap resets).
- * Capped at 43 200 (12 h — the Cloudflare Queues maximum).
- */
-export function delayUntilNextWindow(now: Date = new Date()): number {
-  const nowMs = now.getTime();
-  const dayEndMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) + MS_PER_DAY;
-  const sec = Math.max(60, Math.ceil((dayEndMs - nowMs) / 1000));
-  return Math.min(sec, 43200);
-}

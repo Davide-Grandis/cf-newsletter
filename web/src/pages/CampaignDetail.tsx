@@ -21,6 +21,8 @@ export default function CampaignDetail() {
   const detail = useQuery({
     queryKey: ['campaign', id],
     queryFn: () => api<Detail>(`/api/campaigns/${id}`),
+    // Keep delivery progress current while the campaign is being sent.
+    refetchInterval: (q) => (q.state.data?.campaign.status === 'sending' ? 30_000 : false),
   });
   const ts = useQuery({
     queryKey: ['campaign-ts', id],
@@ -99,6 +101,7 @@ export default function CampaignDetail() {
             <Stat label="Opens" value={evt.open ?? 0} />
             <Stat label="Clicks" value={evt.click ?? 0} />
           </div>
+          <DeliveryProgress campaign={detail.data.campaign} />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat label="Bounces" value={evt.bounce ?? 0} />
             <Stat label="Unsubs" value={evt.unsubscribe ?? 0} />
@@ -143,6 +146,32 @@ export default function CampaignDetail() {
       )}
 
       <SendsTable campaignId={id} />
+    </div>
+  );
+}
+
+// Recipients handed to delivery so far versus those paused for a later day's
+// sending budget (or a retry). At creation, the first is what fit in that day's
+// remaining budget; both update as each day's share is released.
+function DeliveryProgress({ campaign }: { campaign: Detail['campaign'] }) {
+  const released = campaign.released_count ?? 0;
+  const paused = campaign.paused_count ?? 0;
+  if (released + paused === 0) return null;
+  const sending = campaign.status === 'sending';
+  const next = campaign.next_release_at ? fmtDate(campaign.next_release_at) : '';
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-3">
+        <Stat label="Released for delivery" value={released} ok />
+        <Stat label="Paused for later delivery" value={paused} />
+      </div>
+      {sending && paused > 0 && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {campaign.dispatch_paused
+            ? `Sending is paused after a Cloudflare sending limit or account error; it resumes automatically${next ? ` at ${next}` : ''}.`
+            : `Paused recipients are released automatically ${next ? `from ${next}` : 'in the next sending window'}, as the daily sending budget allows (or when a temporary send error is retried).`}
+        </p>
+      )}
     </div>
   );
 }
@@ -194,7 +223,7 @@ function SendsTable({ campaignId }: { campaignId: string }) {
           <option value="sent">Sent</option>
           <option value="failed">Failed</option>
           <option value="bounced">Bounced</option>
-          <option value="queued">Queued</option>
+          <option value="pending">Pending</option>
         </select>
       </div>
       <div className="bg-white border border-slate-200 rounded overflow-hidden dark:bg-slate-900 dark:border-slate-800">

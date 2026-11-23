@@ -46,8 +46,10 @@ Only subscribers that satisfy **both** conditions receive a campaign:
 status = 'active' AND confirm_token IS NULL
 ```
 
-This is enforced in `shared/db.ts → iterateActiveSubscribers()`, the generator
-the ingest worker uses to stream recipients. Consequences:
+This is enforced when the ingest worker records a campaign's sends
+(`shared/dispatch.ts → createPendingSends()`), and again just before each send:
+a subscriber who unsubscribed, bounced or became unconfirmed while a campaign
+was waiting for its daily budget is skipped. Consequences:
 
 - A **pending** public signup (`confirm_token` set) never receives mail, even
   though its `status` is `active`.
@@ -390,7 +392,7 @@ just won't receive mail until reactivated by one of the above.
 | Concern | File |
 | --- | --- |
 | Schema (`subscribers`, `slug`, `allow_public_signup`, `confirm_token`) | `db/schema.sql` (migration `db/migrations/0012_*`) |
-| Recipient gate | `shared/db.ts → iterateActiveSubscribers` |
+| Recipient gate | `shared/dispatch.ts → createPendingSends`, `workers/consumer` (re-checked before sending) |
 | Unsubscribe URL builder | `shared/tracking.ts → unsubscribeUrl` |
 | Footer + guaranteed unsubscribe link | `shared/footer.ts` |
 | Public subscribe/verify pages + Turnstile | `workers/tracker/src/index.ts` |

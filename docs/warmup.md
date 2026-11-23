@@ -109,9 +109,10 @@ double-advance.
 
 ---
 
-## 4. Enforcement (per consumer invocation)
+## 4. Enforcement (dispatcher)
 
-At the start of each `queue()` batch the consumer:
+The budget is enforced by the dispatcher (`shared/dispatch.ts`, run by the
+consumer; see [workers.md](workers.md)), not per queue message. Each run:
 
 1. Loads `warmup_state` and the config (`WARMUP_SCHEDULE`,
    `WARMUP_TARGET_WEEKLY`, `WARMUP_FALLBACK_DAILY_CAP`).
@@ -123,18 +124,16 @@ At the start of each `queue()` batch the consumer:
    - `sentThisWeek` since `week_started_at`.
 5. Computes remaining capacity:
    `remaining = min(dailyCap − sentToday, weeklyCap − sentThisWeek)`.
-6. For each queued message:
-   - **No capacity** (`remaining ≤ 0`): `msg.retry({ delaySeconds })` until the
-     next window — next UTC midnight if only the daily cap is exhausted, or the
-     end of the weekly window if the weekly cap is exhausted. Logged as
-     `consumer.throttled`.
-   - **Partial capacity** (`0 < remaining < batch size`): send what fits, split
-     off the overflow and re-enqueue it with `delaySeconds`. Logged as
-     `consumer.split`.
-   - **Full capacity**: send normally.
+6. Subtracts rows already claimed but not yet sent, then claims that many
+   `pending` sends (oldest campaign first) and enqueues them as batches.
+7. If recipients remain, schedules **one** dispatcher run for the next UTC
+   midnight. The backlog stays in D1 meanwhile, so a campaign larger than the
+   daily cap simply continues the next day, and the next, for as long as the
+   warmup needs. Logged as `consumer.dispatch`.
 
-Cloudflare Queues caps `delaySeconds` at 12 h (43,200 s); longer waits are
-achieved by the message being retried again and re-evaluated.
+Releases before 2.6.5 paused by retrying the queued batch, which used up the
+queue's retries and dead-lettered campaigns that needed more than about a day
+and a half.
 
 ---
 
@@ -220,8 +219,8 @@ The consumer writes to the `logs` table (visible on the console's Logs page):
 
 | Event                          | When                                                             |
 | ------------------------------ | ---------------------------------------------------------------- |
-| `consumer.throttled`           | A batch was re-queued because a cap was exhausted.               |
-| `consumer.split`               | A batch was partially sent and the overflow re-enqueued.         |
+| `consumer.dispatch`            | Recipients were dispatched, or the daily budget was reached and the rest continue in the next window. |
+| `consumer.send_paused`         | An account-level send error (rate or daily limit, sending not ready) paused sending until the logged time. |
 | `consumer.quota_fetch_failed`  | The daily quota API read failed (fell back to last/known value). |
 
 ---

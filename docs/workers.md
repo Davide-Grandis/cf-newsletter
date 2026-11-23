@@ -77,13 +77,14 @@ uploads the raw `.eml` to R2 at `campaigns/<id>/raw.eml`, and inserts one
 `attachments` row per file. Bytes are deduped per campaign by SHA-256 (so
 the same image embedded twice only stores once in R2).
 
-**6. Fan-out via queue.** Streams active subscribers using the keyset-
-paginated `iterateActiveSubscribers` generator (no full-table loads),
-buffers them into chunks of `BATCH_SIZE`, and `env.QUEUE.send(...)` each
-batch as `{ campaignId, batch: Recipient[] }`. Attachments are **never**
-embedded in the queue message — only the `campaignId` — because Queue
-messages are capped at 128 KB. The consumer pulls attachment bytes from R2
-once per batch.
+**6. Record the sends.** One `INSERT … SELECT` writes a `pending` row in
+`sends` for every active, confirmed subscriber (`createPendingSends()` in
+`shared/dispatch.ts`), then asks the consumer for a dispatcher run with a
+`{ kind: 'dispatch' }` queue message (30 s delay, so a consumer deployed in
+the same update is already running). Recipients are **not** put in queue
+messages: the backlog lives in D1 and the consumer's dispatcher sends it
+within the daily budget (see the consumer). Attachments are never in queue
+messages either; the consumer pulls their bytes from R2.
 
 **7. Finalize** by writing `total_recipients` so the admin dashboard has a
 denominator for `sent_count` and `failed_count`.
@@ -93,10 +94,10 @@ denominator for `sent_count` and `failed_count`.
 - **Unauthorized sender or auth fail** → `message.setReject(...)`, sender
   gets an NDR, no DB writes happen.
 - **Bad attachment** → same: rejected before any DB or R2 writes.
-- **Partial failure mid-fan-out** (e.g. queue write fails after some
-  batches enqueued): the campaign is left in `status='sending'` with
-  partial recipients. The consumer keeps draining what was enqueued; an
-  operator can re-enqueue the missing tail using the admin worker.
+- **Failure after the campaign row is written** (e.g. D1 unavailable):
+  the email handler throws and Email Routing retries delivery; the pending
+  rows are written in a single statement, so a campaign never has a
+  partial recipient list.
 
 ### Why these decisions
 
@@ -117,43 +118,64 @@ denominator for `sent_count` and `failed_count`.
 
 ### Purpose
 
-The send engine. It pulls recipient batches off the queue, materializes a
-full per-recipient MIME message (with personalized tracking links and any
-attachments), and hands it to the `SEND_EMAIL` Email Sending (beta)
-binding. It is also where idempotency is enforced — retries must not
-double-send.
+The send engine. It runs the **dispatcher**, which turns the `pending`
+backlog in D1 into queued batches within the daily budget, and it sends
+those batches: it materializes a full per-recipient MIME message (with
+personalized tracking links and any attachments) and hands it to the
+`SEND_EMAIL` Email Sending binding. Every send is recorded per row, so a
+redelivered message never sends twice.
 
-### Step by step
+### Queue messages
 
-**1. Cache campaign + attachments per batch.**
+| Message | Meaning |
+|---|---|
+| `{ kind: 'dispatch', at? }` | Run the dispatcher. `at` marks the single scheduled run (`dispatch_state.next_tick_at`). |
+| `{ kind: 'send', campaignId, batchId }` | Send the rows of that batch that are still `pending`. |
+| `{ campaignId, batch }` | Queued by releases before 2.6.5. Its recipients become `pending` rows (already-sent ones are left alone) and are dispatched normally. |
 
-```ts
-const cache = new Map<string, { campaign, parts: AttachmentPart[] }>();
-```
+Every invocation that handles a message runs the dispatcher once at the end.
 
-A queue invocation can deliver up to `max_batch_size: 10` messages, often
-all for the same `campaignId`. The worker loads the campaign row + all
-attachments + all R2 bytes **once** and reuses them across every recipient
-in the invocation. R2 reads are the most expensive thing in the hot path,
-so this caching matters.
+### Dispatcher (`shared/dispatch.ts → dispatch()`)
 
-In `link_mode`, `disposition='attachment'` files are *not* loaded into the
-parts array — they'll be linked, not embedded — but `inline` files (e.g.
-images referenced by `cid:`) are still loaded and attached so the HTML
-renders correctly.
+1. Takes a 60 s lease on `dispatch_state`, so concurrent consumers can't
+   spend the budget twice. If another run holds it, a run is scheduled
+   for when the lease expires.
+2. If sending is paused (`paused_until`, see errors below), schedules a run
+   for the end of the pause and stops.
+3. Releases claims older than 6 hours (a batch whose message never
+   completed, e.g. dead-lettered), so those rows are dispatched again.
+4. Budget: `min(warmup cap, account quota) − sent today − claimed but not
+   yet sent` (warmup: [warmup.md](warmup.md)).
+5. Claims due `pending` rows (no `next_attempt_at`, or one in the past),
+   oldest campaign first, `BATCH_SIZE` per batch, by stamping `batch_id` and
+   `claimed_at`, and enqueues one `send` message per batch (at most 200
+   batches per run; a larger budget continues in an immediate follow-up run).
+6. Schedules the next run: the next UTC midnight when due rows remain (the
+   budget is spent), else the earliest `next_attempt_at` of a backed-off row,
+   else nothing. Only **one** scheduled `dispatch` message is kept: a run is
+   not scheduled again if one is already due no later. A campaign can
+   therefore take as many days as the warmup needs; nothing waits in the
+   queue and no queue retry is used for waiting.
 
-**2. Pre-flight size guard.**
+### Sending a batch
 
-```ts
-const estimate = estimateRawSize((campaign.text??'').length, (campaign.html??'').length, parts);
-if (estimate > Number(env.MAX_RAW_BYTES)) throw new Error(`message too large`);
-```
+**1. Load the batch.** Only rows of this `batchId` that are still `pending`
+are read, with their subscribers. A redelivered message finds nothing left
+to send. Subscribers who unsubscribed, bounced or became unconfirmed since
+ingest are not sent to: their row is deleted and the campaign's
+`total_recipients` reduced.
 
-`estimateRawSize` accounts for the ~33 % base64 overhead of attachments.
-Failing fast here is cheaper than letting `SEND_EMAIL` reject every
-recipient individually.
+**2. Cache campaign + attachments per invocation.** The campaign row, all
+attachments and their R2 bytes are loaded **once** and reused across every
+recipient and batch in the invocation. In `link_mode`,
+`disposition='attachment'` files are *not* loaded — they'll be linked, not
+embedded — but `inline` files (e.g. images referenced by `cid:`) are.
 
-**3. Per recipient: render personalized HTML.** If the campaign was authored
+**3. Pre-flight size guard.** `estimateRawSize` accounts for the ~33 %
+base64 overhead of attachments. An oversize message fails the batch's rows
+permanently (normally caught at ingest).
+
+**4. Per recipient: render personalized HTML.** If the campaign was authored
 in plain text only (no HTML part), the HTML body is derived from the text with
 `textToHtml()` (`shared/mime.ts`: escaped, blank lines become paragraphs, line
 breaks become `<br>`); otherwise HTML-preferring mail clients would show an
@@ -166,7 +188,7 @@ empty message with just the footer. The stored campaign is unchanged.
 - runs `instrumentHtml` to rewrite every `href="..."` into a signed click
   URL and append the open pixel.
 
-**4. Per recipient: build MIME** with `shared/mime.ts` which produces:
+**5. Per recipient: build MIME** with `shared/mime.ts` which produces:
 
 ```
 multipart/mixed
@@ -191,43 +213,47 @@ when they contain specials, and RFC 2047-encoded when non-ASCII. Every other
 header value has CR/LF removed, and custom header names are validated, so
 subscriber data can never start a new header line.
 
-**5. Send.**
+**6. Send and record the outcome.**
 
 ```ts
 await env.SEND_EMAIL.send(new EmailMessage(fromAddr, r.email, raw));
-await recordSendSuccess(env.DB, campaignId, r.subscriberId, messageId);
+await completeSend(env.DB, r.send_id, campaignId, 'sent', { messageId });
 ```
 
-`recordSendSuccess` is an idempotent upsert keyed on `UNIQUE(campaign_id,
-subscriber_id)` — so even if the queue redelivers the same batch, we
-don't double-count `sent_count`.
+`completeSend` changes the row only while it is still `pending`, and only
+then increments `sent_count` / `failed_count`, so outcomes are recorded once.
 
-**6. Error handling per recipient vs. per batch.**
+**7. Errors** (`classifySendError()`):
 
-```ts
-try { /* per recipient */ }
-catch (err) { await recordSendFailure(env.DB, campaignId, r.subscriberId, msg); }
-// after all recipients in the message:
-msg.ack();
-// only on outer / setup error:
-msg.retry();
-```
+| Error | Action |
+|---|---|
+| `E_DAILY_LIMIT_EXCEEDED` | Pause all sending until the next UTC midnight. |
+| `E_RATE_LIMIT_EXCEEDED`, `E_INTERNAL_SERVER_ERROR` | Pause all sending for 5 minutes. |
+| `E_EMAIL_SENDING_NOT_READY`, `E_SENDER_DOMAIN_NOT_AVAILABLE`, `E_SENDER_DOMAIN_NOT_CONFIGURED`, `E_SENDER_NOT_VERIFIED`, `E_ACCOUNT_SUSPENDED` | Pause all sending for 1 hour. |
+| `E_RECIPIENT_SUPPRESSED` | The send fails; the subscriber becomes `bounced` (hard, code `E_RECIPIENT_SUPPRESSED`) with a bounce event, so later campaigns skip them. |
+| Any other `E_…` code, or a malformed request | The send fails. |
+| No code (network or unexpected error) | Retried after 5 min, 30 min, then 2 h; then the send fails. |
 
-A recipient-level error (one bad address, one quota error) is logged to
-`sends` and **does not** cause a queue retry — otherwise the other 99
-recipients in the batch would be re-sent. Only a setup-level failure
-(can't load campaign, can't reach D1, size guard tripped) causes
-`msg.retry()`. After `max_retries: 3`, the batch flows to `cf-newsletter-dlq`
-for manual replay.
+A pause fails nobody: the batch's unsent rows (the current one included)
+return to the backlog and the dispatcher resumes at the end of the pause
+(`dispatch_state.paused_until`, logged as `consumer.send_paused`). A
+per-recipient retry sets `attempts` and `next_attempt_at` and schedules a
+dispatcher run for that time.
+
+A failure outside the per-recipient sends (e.g. D1 unavailable) retries the
+queue message. That is safe because already-sent rows are skipped; after
+`max_retries: 3` the message is dead-lettered and its claimed rows are
+released after 6 hours and dispatched again.
 
 ### Why these decisions
 
 - **Caching campaign and attachments per batch**: amortizes D1 + R2 cost.
-- **Idempotent upserts on `sends`**: queue redelivery is a fact of life
-  ("at-least-once"); the DB schema makes it safe.
-- **Per-recipient try/catch + outer try/catch**: distinguishes "this
-  recipient is bad" (don't retry) from "this batch can't run yet"
-  (retry).
+- **Backlog in D1, not in the queue**: waiting for budget never uses a
+  queue retry or parks messages; progress is visible per row (the
+  console's **Pending** filter on a campaign) and survives redelivery.
+- **Per-row outcomes**: queue redelivery is a fact of life
+  ("at-least-once"); a row changes only while `pending`, so nobody is sent
+  twice and counters are never double-incremented.
 - **Pre-flight size estimate**: a 40 MB MIME would just be rejected by
   Email Sending anyway; failing in our code lets us mark the campaign
   failed cleanly and surface a useful error.

@@ -9,16 +9,18 @@ import {
   type AttachmentLimits,
 } from '../../../shared/attachments';
 import { estimateRawSize } from '../../../shared/mime';
-import { iterateActiveSubscribers, markCampaignCompleteIfDone, writeLog } from '../../../shared/db';
+import { markCampaignCompleteIfDone, writeLog } from '../../../shared/db';
+import { createPendingSends, requestDispatch } from '../../../shared/dispatch';
 import { loadSettings } from '../../../shared/settings';
 import { verifyAuthorAuthentication } from '../../../shared/sender-auth';
-import type { QueueMessage, Recipient } from '../../../shared/types';
+import type { QueueMessage } from '../../../shared/types';
+
+const DISPATCH_START_DELAY_S = 30;
 
 export interface Env {
   DB: D1Database;
   ARCHIVE: R2Bucket;
   QUEUE: Queue<QueueMessage>;
-  BATCH_SIZE: string;
   MAX_ATTACHMENT_BYTES: string;
   MAX_TOTAL_ATTACHMENT_BYTES: string;
   MAX_ATTACHMENT_COUNT: string;
@@ -242,31 +244,12 @@ export default {
         .run();
     }
 
-    // 7. Enqueue subscriber batches
-    const batchSize = Math.max(1, Number(env.BATCH_SIZE));
-    let total = 0;
-    let batches = 0;
-    let buf: Recipient[] = [];
-    const flush = async () => {
-      if (buf.length === 0) return;
-      await env.QUEUE.send({ campaignId, batch: buf });
-      total += buf.length;
-      batches += 1;
-      await writeLog(env.DB, {
-        source: 'ingest',
-        event: 'queue.enqueued',
-        campaignId,
-        newsletterId,
-        message: `Enqueued batch ${batches} (${buf.length} recipients)`,
-        detail: { batch: batches, size: buf.length, batchSize },
-      });
-      buf = [];
-    };
-    for await (const s of iterateActiveSubscribers(env.DB, newsletterId)) {
-      buf.push({ subscriberId: s.id, email: s.email, first_name: s.first_name ?? undefined, last_name: s.last_name ?? undefined, token: s.token });
-      if (buf.length >= batchSize) await flush();
-    }
-    await flush();
+    // 7. Record one pending send per recipient. The consumer's dispatcher sends
+    //    them within the daily budget (shared/dispatch.ts); nothing waits in the
+    //    queue. The short delay lets a consumer deployed in the same update
+    //    start first, so the dispatch request never reaches an older consumer.
+    const total = await createPendingSends(env.DB, campaignId, newsletterId);
+    if (total > 0) await requestDispatch(env.QUEUE, DISPATCH_START_DELAY_S);
 
     await env.DB
       .prepare(
@@ -281,9 +264,9 @@ export default {
       campaignId,
       newsletterId,
       message: total === 0
-        ? 'No active subscribers — nothing enqueued'
-        : `Queued ${total} recipient(s) across ${batches} batch(es) of ${batchSize}`,
-      detail: { total, batches, batchSize },
+        ? 'No active subscribers — nothing to send'
+        : `Scheduled ${total} recipient(s) for dispatch within the daily sending budget`,
+      detail: { total },
     });
   },
 };

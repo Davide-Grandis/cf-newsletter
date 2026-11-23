@@ -18,7 +18,7 @@ Author ──▶ Email Routing ──▶ Ingest Worker (Email handler)
                                   ├── Parse MIME (postal-mime): subject, html, text, attachments
                                   ├── Validate + store attachments in R2
                                   ├── Insert campaign + attachment rows in D1
-                                  └── Enqueue subscriber batches ──▶ Cloudflare Queue
+                                  └── Pending sends in D1 + dispatch ──▶ Cloudflare Queue
                                                                           │
                                                                           ▼
                                                                     Consumer Worker
@@ -42,7 +42,7 @@ Author ──▶ Email Routing ──▶ Ingest Worker (Email handler)
 
 | Worker      | Type           | Purpose                                                        |
 | ----------- | -------------- | -------------------------------------------------------------- |
-| `ingest`    | Email handler  | Parse inbound mail, store attachments to R2, enqueue batches   |
+| `ingest`    | Email handler  | Parse inbound mail, store attachments to R2, record pending sends |
 | `consumer`  | Queue consumer | Build MIME per recipient, send via `SEND_EMAIL`, log to D1     |
 | `tracker`   | HTTP           | Pixel, signed click redirect, unsubscribe, attachment download |
 | `bounce`    | Email+Cron     | One-click email unsubscribe; GraphQL delivery-failure sync     |
@@ -113,13 +113,13 @@ wrangler r2 object put cf-newsletter-admin/header.png \
   - Upload to R2 `campaigns/<id>/attachments/<sha256>` with metadata.
   - If total raw size > `ATTACHMENT_LINK_THRESHOLD_BYTES`, switch to **link mode**: rewrite HTML to signed download URLs served by Tracker Worker; do not attach.
 - Insert `campaigns` (status=`sending`) and `attachments` rows.
-- Stream active subscribers in pages, chunk into batches of `BATCH_SIZE`, `env.QUEUE.send(...)`.
+- Record one `pending` row in `sends` per active, confirmed subscriber (single `INSERT … SELECT`) and request a dispatcher run (`{ kind: 'dispatch' }`).
 - Reply NDR via `message.setReject` if unauthorized or oversized.
-- Bindings: `DB`, `QUEUE`, `ARCHIVE`, vars `BATCH_SIZE`, attachment limits.
+- Bindings: `DB`, `QUEUE`, `ARCHIVE`, attachment limits.
 
 ### `consumer-worker` (Queue consumer)
 
-- `queue(batch, env)` handler.
+- `queue(batch, env)` handler. Runs the **dispatcher** (`shared/dispatch.ts`): claims due `pending` sends within the daily budget (warmup cap and account quota), enqueues one `{ kind: 'send', campaignId, batchId }` message per `BATCH_SIZE` batch, and schedules a single dispatcher run for the next window while a backlog remains.
 - On batch start: load campaign + `attachments` rows; pull bytes from R2 once into an in-memory `Map<sha256, Uint8Array>` (cached for the batch lifetime).
 - For each recipient build MIME with the in-house builder (`shared/mime.ts`):
   - `multipart/mixed`
@@ -129,8 +129,8 @@ wrangler r2 object put cf-newsletter-admin/header.png \
   - Headers: `From`, `To`, `Subject`, `Date`, `Message-ID`, `List-Id`, `List-Unsubscribe`, `List-Unsubscribe-Post: List-Unsubscribe=One-Click`.
 - Pre-flight size guard: reject batch early if total MIME (×1.34 base64 overhead) exceeds `MAX_RAW_BYTES`.
 - `await env.SEND_EMAIL.send(new EmailMessage(from, to, raw))`.
-- On success → update `sends`, increment `campaigns.sent_count`.
-- On error → log to `sends`; `msg.ack()` for permanent failures, `msg.retry()` for transient; exhausted retries flow to DLQ.
+- Sends only the batch's rows that are still `pending`; each outcome changes the row once and then increments `sent_count`/`failed_count`.
+- On error: account-level codes (rate/daily limit, sending not ready) pause dispatching and return the batch to the backlog; `E_RECIPIENT_SUPPRESSED` fails the send and bounces the subscriber; other coded errors fail the send; uncoded errors back off (5 min, 30 min, 2 h) then fail. Queue retries are used only for infrastructure failures.
 - Bindings: `DB`, `ARCHIVE`, `SEND_EMAIL`, settings `TRACKING_BASE_URL`, `BASE_DOMAIN` (default sender `newsletter@<BASE_DOMAIN>`).
 
 ### `tracker-worker` (HTTP Worker)
@@ -249,7 +249,7 @@ newsletter/
 
 ## Key flows
 
-**Send**: Author email → Ingest verifies/parses, stores attachments in R2, writes D1 → batches enqueued → Consumer loads attachments once, builds MIME per recipient, sends via `SEND_EMAIL` → `sends` updated.
+**Send**: Author email → Ingest verifies/parses, stores attachments in R2, writes D1 → pending sends recorded in D1 → Consumer's dispatcher enqueues batches within the daily budget → Consumer loads attachments once, builds MIME per recipient, sends via `SEND_EMAIL` → `sends` updated.
 
 **Open / click / download**: Tracker Worker logs to `events`; downloads stream from R2 with HMAC-signed URLs.
 
@@ -295,10 +295,9 @@ week-2 threshold (5,000).
 **Enforcement**: at the start of each `queue()` invocation the consumer reads
 the warmup state, refreshes the daily cap (once per UTC day), computes demand
 and the progression, then counts `sends` since the daily (UTC midnight) and
-weekly (`week_started_at`) window starts. Each message sends in full, sends a
-partial slice and re-enqueues the overflow with `delaySeconds`, or `msg.retry`s
-when the cap is exhausted. Cloudflare Queues caps `delaySeconds` at 12 h, so
-longer waits are achieved by repeated retries.
+weekly (`week_started_at`) window starts. The dispatcher claims only that many
+pending sends; the rest stay in D1 and a single dispatcher run is scheduled for
+the next window, so no queue retry is used for waiting.
 
 **Configuration** (settings resolved from the D1 `settings` table → built-in
 defaults in `shared/settings.ts`; edit on the console's **Settings** page):

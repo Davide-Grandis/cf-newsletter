@@ -1,7 +1,10 @@
-export interface QueueMessage {
-  campaignId: string;
-  batch: Recipient[];
-}
+// Queue messages (see shared/dispatch.ts): a dispatcher run, or one claimed
+// batch of pending sends. Releases before 2.6.5 queued the recipients
+// themselves ({ campaignId, batch }); the consumer still accepts those.
+export type QueueMessage =
+  | { kind: 'dispatch'; at?: number }
+  | { kind: 'send'; campaignId: string; batchId: string }
+  | { kind?: undefined; campaignId: string; batch: Recipient[] };
 
 export interface Recipient {
   subscriberId: number;
