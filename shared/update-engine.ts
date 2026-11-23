@@ -39,6 +39,27 @@ async function activeVersion(token: string, account: string, name: string): Prom
   return active[0].version_id;
 }
 
+// Cloudflare's deployments API can keep reporting the previous version for a
+// while after an upload. Wait for the uploaded version to become active
+// instead of recording the first answer (engines up to 1.1.1 recorded the
+// previous version as deployed, which then failed verification).
+export const ACTIVATION_POLL = { attempts: 10, delayMs: 2_000 };
+
+async function newActiveVersion(token: string, account: string, name: string, previousVersion: string): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    const current = await activeVersion(token, account, name);
+    if (current !== previousVersion) return current;
+    if (attempt >= ACTIVATION_POLL.attempts) throw new Error(`${name} was uploaded but Cloudflare still reports the previous version as active. Resume the update to continue.`);
+    await new Promise((resolve) => setTimeout(resolve, ACTIVATION_POLL.delayMs));
+  }
+}
+
+// A record pointing at the previous version can only come from that lag; the
+// active version is ours when it is new and carries this release's identity.
+function staleRecord(snapshot: Snapshot, currentVersion: string, matchesRelease: boolean): boolean {
+  return snapshot.deployedVersion === snapshot.previousVersion && currentVersion !== snapshot.previousVersion && matchesRelease;
+}
+
 export async function captureWorkers(token: string, account: string, database: string, artifact: ReleaseArtifact, installed: string): Promise<Record<ProductWorker, Snapshot>> {
   assertUpdateCompatible(artifact, installed);
   const snapshots: Partial<Record<ProductWorker, Snapshot>> = {};
@@ -112,12 +133,12 @@ export function deploymentMetadata(settings: Settings, artifact: ReleaseArtifact
   return metadata;
 }
 
-export async function deployProductWorker(token: string, account: string, worker: ProductWorker, artifact: ReleaseArtifact, settings: Settings, publishedAt: string, assetsJwt?: string): Promise<string> {
+export async function deployProductWorker(token: string, account: string, worker: ProductWorker, artifact: ReleaseArtifact, settings: Settings, publishedAt: string, previousVersion: string, assetsJwt?: string): Promise<string> {
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify(deploymentMetadata(settings, artifact, publishedAt, assetsJwt))], { type: 'application/json' }));
   form.append('main.js', new Blob([artifact.workers[worker]!], { type: 'application/javascript+module' }), 'main.js');
   await cloudflare(token, `/accounts/${account}/workers/scripts/cf-newsletter-${worker}`, { method: 'PUT', body: form });
-  return activeVersion(token, account, `cf-newsletter-${worker}`);
+  return newActiveVersion(token, account, `cf-newsletter-${worker}`, previousVersion);
 }
 
 export async function loadCheckpoint(query: Query, id: string): Promise<Checkpoint> {
@@ -162,19 +183,23 @@ export async function deployUpdateWorker(query: Query, id: string, token: string
   const version = live.bindings.find((binding) => binding.name === 'APP_VERSION')?.text;
   const commit = live.bindings.find((binding) => binding.name === 'APP_COMMIT')?.text;
   const currentVersion = await activeVersion(token, account, `cf-newsletter-${worker}`);
+  const matchesRelease = version === artifact.manifest.version && commit === artifact.manifest.commit;
+  // Only the deployments-API lag can record the previous version as deployed;
+  // treat it as not yet recorded, so the new version is adopted or redeployed.
+  if (snapshot.deployedVersion === snapshot.previousVersion) delete snapshot.deployedVersion;
   if (snapshot.deployedVersion) {
-    if (currentVersion !== snapshot.deployedVersion || version !== artifact.manifest.version || commit !== artifact.manifest.commit) {
+    if (currentVersion !== snapshot.deployedVersion || !matchesRelease) {
       throw new Error('Deployment changed outside this update. Inspect the live state before recovery.');
     }
     return;
   }
   // A timeout after a successful upload must not blindly redeploy the Worker.
-  if (currentVersion !== snapshot.previousVersion && version === artifact.manifest.version && commit === artifact.manifest.commit) {
+  if (currentVersion !== snapshot.previousVersion && matchesRelease) {
     snapshot.deployedVersion = currentVersion;
   } else {
     if (currentVersion !== snapshot.previousVersion) throw new Error('Deployment changed after preflight. Inspect it before recovery.');
     if (worker === 'admin' && !checkpoint.assetsJwt) checkpoint.assetsJwt = await uploadAssets(token, account, artifact);
-    snapshot.deployedVersion = await deployProductWorker(token, account, worker, artifact, snapshot.settings, publishedAt, worker === 'admin' ? checkpoint.assetsJwt : undefined);
+    snapshot.deployedVersion = await deployProductWorker(token, account, worker, artifact, snapshot.settings, publishedAt, snapshot.previousVersion, worker === 'admin' ? checkpoint.assetsJwt : undefined);
   }
   await saveCheckpoint(query, id, checkpoint);
 }
@@ -184,10 +209,14 @@ export async function verifyUpdate(query: Query, id: string, token: string, acco
   const checkpoint = await loadCheckpoint(query, id);
   for (const worker of PRODUCT_WORKERS) {
     const settings = await cloudflare<Settings>(token, `/accounts/${account}/workers/scripts/cf-newsletter-${worker}/settings`);
-    if (settings.bindings.find((binding) => binding.name === 'APP_VERSION')?.text !== artifact.manifest.version ||
-        settings.bindings.find((binding) => binding.name === 'APP_COMMIT')?.text !== artifact.manifest.commit ||
-        await activeVersion(token, account, `cf-newsletter-${worker}`) !== checkpoint.workers?.[worker]?.deployedVersion) {
-      throw new Error(`Verification failed for cf-newsletter-${worker}.`);
+    const matchesRelease = settings.bindings.find((binding) => binding.name === 'APP_VERSION')?.text === artifact.manifest.version &&
+      settings.bindings.find((binding) => binding.name === 'APP_COMMIT')?.text === artifact.manifest.commit;
+    const snapshot = checkpoint.workers?.[worker];
+    const active = await activeVersion(token, account, `cf-newsletter-${worker}`);
+    if (!snapshot || !matchesRelease) throw new Error(`Verification failed for cf-newsletter-${worker}.`);
+    if (active !== snapshot.deployedVersion) {
+      if (!staleRecord(snapshot, active, matchesRelease)) throw new Error(`Verification failed for cf-newsletter-${worker}.`);
+      snapshot.deployedVersion = active;
     }
   }
   const values: Record<string, string> = {

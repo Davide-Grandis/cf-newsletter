@@ -1,4 +1,4 @@
-export const UPDATER_VERSION = '1.1.1';
+export const UPDATER_VERSION = '1.1.2';
 export const PRODUCT_WORKERS = ['ingest', 'consumer', 'tracker', 'bounce', 'cleanup', 'admin'] as const;
 export type ProductWorker = typeof PRODUCT_WORKERS[number];
 

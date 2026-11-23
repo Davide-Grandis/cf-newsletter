@@ -7,7 +7,9 @@ import {
   finishJob, jobById, UPDATE_SCHEMA, sqlStatements, updateIntentId, UPDATE_INTENT_TTL_MS,
 } from '../shared/update-state';
 import { compareVersions, boundedBytes, validateArtifact, assertUpdateCompatible, type ReleaseArtifact } from '../shared/update-release';
-import { deploymentMetadata, saveCheckpoint } from '../shared/update-engine';
+import { ACTIVATION_POLL, deploymentMetadata, saveCheckpoint } from '../shared/update-engine';
+
+ACTIVATION_POLL.delayMs = 1;
 import { Updater, UpdateWorkflow } from '../workers/updater/src/index';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -55,7 +57,8 @@ function artifact(): ReleaseArtifact {
   };
 }
 
-async function fixture(failWorker?: string) {
+async function fixture(failWorker?: string, initialLag = 0) {
+  let activationLag = initialLag;
   const { query, db, sqlite } = database();
   const keys = await credentialKeyPair();
   await query("INSERT INTO deployment_metadata(key,value) VALUES('updater_public_key',?)", [keys.publicKey]);
@@ -77,6 +80,9 @@ async function fixture(failWorker?: string) {
   }]));
   const versions = Object.fromEntries(names.map((name) => [name, `old-${name}`]));
   const deployments: string[] = [];
+  // Simulates Cloudflare's deployments API still reporting the previous version
+  // for `activationLag` reads after an upload.
+  const lagging: Record<string, { next: string; remaining: number }> = {};
   let failure = failWorker;
   const network = mock.method(globalThis, 'fetch', async (url, init) => {
     const path = String(url);
@@ -84,6 +90,9 @@ async function fixture(failWorker?: string) {
     if (path.includes('/releases/download/')) return new Response(body);
     const worker = /scripts\/cf-newsletter-(\w+)/.exec(path)?.[1];
     if (worker && path.endsWith('/settings')) return Response.json({ success: true, result: settings[worker] });
+    if (worker && path.endsWith('/deployments') && lagging[worker]) {
+      if (lagging[worker]!.remaining-- <= 0) { versions[worker] = lagging[worker]!.next; delete lagging[worker]; }
+    }
     if (worker && path.endsWith('/deployments')) return Response.json({ success: true, result: { deployments: [{ versions: [{ version_id: versions[worker], percentage: 100 }] }] } });
     if (path.endsWith('/assets-upload-session')) return Response.json({ success: true, result: { jwt: 'test-asset-session', buckets: [] } });
     if (worker && init?.method === 'PUT') {
@@ -93,7 +102,8 @@ async function fixture(failWorker?: string) {
       assert.deepEqual(metadata.keep_bindings, ['secret_text']);
       assert.equal(metadata.bindings.find((binding: { name: string }) => binding.name === 'ARCHIVE').bucket_name, 'custom-archive');
       settings[worker]!.bindings = [...metadata.bindings, { type: 'secret_text', name: 'LINK_SIGNING_KEY' }, { type: 'secret_text', name: 'ATTACHMENT_SIGNING_KEY' }];
-      versions[worker] = `new-${worker}`;
+      if (activationLag > 0) lagging[worker] = { next: `new-${worker}`, remaining: activationLag };
+      else versions[worker] = `new-${worker}`;
       deployments.push(worker);
       return Response.json({ success: true, result: {} });
     }
@@ -122,7 +132,7 @@ async function fixture(failWorker?: string) {
       return action();
     },
   };
-  return { query, sqlite, env, api, workflow, step, release, digest, network, deployments, instances, keys, terminated, clearFailure() { failure = undefined; } };
+  return { query, sqlite, env, api, workflow, step, release, digest, network, deployments, instances, keys, terminated, versions, settings, setActivationLag(value: number) { activationLag = value; }, clearFailure() { failure = undefined; } };
 }
 
 test('SemVer compares numbers and prereleases rather than strings', () => {
@@ -228,6 +238,79 @@ test('partial failure preserves checkpoints and installed version; a re-authoriz
     await f.workflow.run({ payload: { jobId } } as never, f.step as never);
     assert.deepEqual(f.deployments, names);
     assert.equal((await jobById(f.query, jobId)).state, 'complete');
+  } finally { f.network.mock.restore(); f.sqlite.close(); }
+});
+
+test('a lagging deployments API does not record the previous version: the update waits and completes', async () => {
+  const f = await fixture(undefined, 3);
+  try {
+    const jobId = await hostedJob(f);
+    await f.workflow.run({ payload: { jobId } } as never, f.step as never);
+    const job = await jobById(f.query, jobId);
+    assert.equal(job.state, 'complete', String(job.error));
+    assert.deepEqual(f.deployments, names, 'Each Worker is uploaded exactly once');
+    const workers = JSON.parse(job.checkpoint).workers;
+    for (const name of names) assert.equal(workers[name].deployedVersion, `new-${name}`);
+    assert.equal((await f.query("SELECT value FROM deployment_metadata WHERE key='product_version'"))[0]!.value, '2.5.0');
+  } finally { f.network.mock.restore(); f.sqlite.close(); }
+});
+
+test('if the new version is still not reported active, the step fails and resuming adopts it without redeploying', async () => {
+  const f = await fixture(undefined, ACTIVATION_POLL.attempts);
+  try {
+    const jobId = await hostedJob(f);
+    await assert.rejects(f.workflow.run({ payload: { jobId } } as never, f.step as never));
+    const failed = await jobById(f.query, jobId);
+    assert.equal(failed.state, 'failed');
+    assert.match(String(failed.error), /still reports the previous version as active/);
+    f.setActivationLag(0);
+    assert.equal(JSON.parse(failed.checkpoint).workers.ingest.deployedVersion, undefined, 'Nothing wrong is recorded');
+    await f.query("UPDATE update_jobs SET state='queued',error=NULL,credential=?,expires_at=? WHERE id=?", [await encryptCredential(testToken, f.keys.publicKey, jobId), Date.now() + 60_000, jobId]);
+    await f.workflow.run({ payload: { jobId } } as never, f.step as never);
+    const job = await jobById(f.query, jobId);
+    assert.equal(job.state, 'complete', String(job.error));
+    assert.equal(f.deployments.filter((name) => name === 'ingest').length, 1, 'The uploaded ingest version is adopted, not uploaded again');
+    assert.equal(JSON.parse(job.checkpoint).workers.ingest.deployedVersion, 'new-ingest');
+  } finally { f.network.mock.restore(); f.sqlite.close(); }
+});
+
+test('a job left by an older engine that recorded the previous version as deployed resumes without redeploying', async () => {
+  const f = await fixture('admin');
+  try {
+    const jobId = await hostedJob(f);
+    await assert.rejects(f.workflow.run({ payload: { jobId } } as never, f.step as never));
+    // Reproduce engine <=1.1.1 behaviour: the first five Workers are live on the
+    // new version, but their checkpoints recorded the previous version.
+    const checkpoint = JSON.parse((await jobById(f.query, jobId)).checkpoint);
+    for (const name of names.slice(0, 5)) checkpoint.workers[name].deployedVersion = checkpoint.workers[name].previousVersion;
+    await saveCheckpoint(f.query, jobId, checkpoint);
+    await f.query("UPDATE update_jobs SET state='queued',error=NULL,credential=?,expires_at=? WHERE id=?", [await encryptCredential(testToken, f.keys.publicKey, jobId), Date.now() + 60_000, jobId]);
+    f.clearFailure();
+    await f.workflow.run({ payload: { jobId } } as never, f.step as never);
+    const job = await jobById(f.query, jobId);
+    assert.equal(job.state, 'complete', String(job.error));
+    assert.deepEqual(f.deployments, names, 'Only admin is uploaded on resume');
+    const workers = JSON.parse(job.checkpoint).workers;
+    for (const name of names) assert.equal(workers[name].deployedVersion, `new-${name}`);
+  } finally { f.network.mock.restore(); f.sqlite.close(); }
+});
+
+test('verification still fails when a Worker is not running this release', async () => {
+  const f = await fixture('admin');
+  try {
+    const jobId = await hostedJob(f);
+    await assert.rejects(f.workflow.run({ payload: { jobId } } as never, f.step as never));
+    const checkpoint = JSON.parse((await jobById(f.query, jobId)).checkpoint);
+    checkpoint.workers.ingest.deployedVersion = checkpoint.workers.ingest.previousVersion;
+    await saveCheckpoint(f.query, jobId, checkpoint);
+    // Another deployment replaced ingest with a different release.
+    f.settings.ingest!.bindings = f.settings.ingest!.bindings.map((binding) => binding.name === 'APP_VERSION' ? { ...binding, text: '2.4.9' } : binding);
+    await f.query("UPDATE update_jobs SET state='queued',error=NULL,credential=?,expires_at=? WHERE id=?", [await encryptCredential(testToken, f.keys.publicKey, jobId), Date.now() + 60_000, jobId]);
+    f.clearFailure();
+    await assert.rejects(f.workflow.run({ payload: { jobId } } as never, f.step as never));
+    const job = await jobById(f.query, jobId);
+    assert.equal(job.state, 'failed');
+    assert.match(String(job.error), /Deployment changed after preflight/);
   } finally { f.network.mock.restore(); f.sqlite.close(); }
 });
 

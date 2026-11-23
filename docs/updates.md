@@ -53,6 +53,14 @@ locations rather than reconstructing them from default names. Pending additive
 migrations run before code deployment, with recorded postcondition checks.
 Workers deploy sequentially; admin and its static assets deploy last.
 Installed version metadata changes only after all six active versions verify.
+Cloudflare's deployments API can keep reporting a Worker's previous version for
+a while after an upload, so since updater engine 1.1.2 each deploy waits (up to
+about 20 seconds) for the uploaded version to become active before recording
+it. If it is still not reported, the step fails without recording anything and
+resuming adopts the uploaded version without uploading again. A job left by an
+earlier engine that recorded the previous version as deployed (which failed
+with "Verification failed for cf-newsletter-<worker>") resumes the same way,
+provided the active version carries this release's APP_VERSION and APP_COMMIT.
 
 Closing the browser does not cancel the job. Failed jobs retain their lock;
 inspect the error, correct the cause and choose Resume with Cloudflare. A retry
