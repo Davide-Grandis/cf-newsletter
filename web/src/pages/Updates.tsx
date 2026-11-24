@@ -72,11 +72,12 @@ export default function Updates() {
   const pending = check.isPending || handoff.isPending;
 
   return <div className="space-y-5">
-    <section className={card}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className={`${card} !p-0 !space-y-0 overflow-hidden`}>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
         <div><h2 className="text-base font-medium">Application updates</h2><p className="text-sm text-slate-500 dark:text-slate-400">Installed release {status?.installed ?? '...'} · Update engine {status?.updaterVersion ?? '...'}</p></div>
         <button className={button} disabled={pending} onClick={() => check.mutate()}>Check for updates</button>
       </div>
+      <div className="space-y-4 p-4">
       {query.error && <p role="alert" className="text-sm text-red-600">{query.error.message}</p>}
       {status?.checkError && <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">{status.checkError} The latest release could not be confirmed.</p>}
       {release && <div className="space-y-3">
@@ -85,6 +86,7 @@ export default function Updates() {
         <details className="text-sm"><summary className="cursor-pointer">Release notes</summary><pre className="mt-3 whitespace-pre-wrap break-words font-sans text-slate-600 dark:text-slate-300">{release.notes}</pre></details>
       </div>}
       {status?.checkedAt && <p className="text-xs text-slate-500">Last check: {new Date(status.checkedAt).toLocaleString()}</p>}
+      </div>
     </section>
 
     {!active && release?.newer && <section className={card}>
@@ -106,7 +108,5 @@ export default function Updates() {
     </section>}
 
     {(check.error || handoff.error) && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{(handoff.error ?? check.error)!.message}</p>}
-    {!!status?.jobs.length && <section className={card}><h2 className="text-base font-medium">Recent updates</h2><ul className="divide-y divide-slate-200 text-sm dark:divide-slate-700">{status.jobs.map((job) => <li key={job.id} className="py-2"><span className="font-medium">{job.state}</span> · {job.source} · {new Date(job.created_at).toLocaleString()}{job.error && <p className="mt-1 text-red-600 dark:text-red-400">{job.error}</p>}</li>)}</ul></section>}
-    <p className="text-sm text-slate-500 dark:text-slate-400">The <a className="underline" href="https://installer.cf-newsletter.com/" target="_blank" rel="noreferrer">hosted installer/updater</a> also handles updates and recovery when opened directly.</p>
   </div>;
 }
