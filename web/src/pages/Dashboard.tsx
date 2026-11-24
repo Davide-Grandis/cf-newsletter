@@ -78,22 +78,24 @@ export default function Dashboard() {
         {!isSuper && <Card label="Scheduled to send" value={data.campaigns?.scheduled ?? 0} sub="in your newsletters" />}
       </div>
 
-      <div className="flex items-center gap-3 -mb-3">
-            <h2 className="text-base font-medium">Events in the last 7 days</h2>
-            <div className="flex-1 border-t border-slate-200 dark:border-slate-800" />
-          </div>
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <Card label="Open events" value={evt.open ?? 0} />
-        <Card label="Click events" value={evt.click ?? 0} />
-        <Card label="Bounce events" value={evt.bounce ?? 0} />
-        <Card label="Subscribe events" value={evt.subscribe ?? 0} />
-        <Card label="Unsubscribe events" value={evt.unsubscribe ?? 0} />
-        <Card label="Download events" value={evt.download ?? 0} />
+      <div>
+        <div className="flex items-center gap-3 mb-3">
+          <h2 className="text-base font-medium">Events in the last 7 days</h2>
+          <div className="flex-1 border-t border-slate-200 dark:border-slate-800" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <Card label="Open events" value={evt.open ?? 0} />
+          <Card label="Click events" value={evt.click ?? 0} />
+          <Card label="Bounce events" value={evt.bounce ?? 0} />
+          <Card label="Subscribe events" value={evt.subscribe ?? 0} />
+          <Card label="Unsubscribe events" value={evt.unsubscribe ?? 0} />
+          <Card label="Download events" value={evt.download ?? 0} />
+        </div>
       </div>
 
       {isSuper && (
-        <>
-          <div className="flex items-center gap-3 -mb-3">
+        <div>
+          <div className="flex items-center gap-3 mb-3">
             <h2 className="text-base font-medium">Status / warm-up</h2>
             <div className="flex-1 border-t border-slate-200 dark:border-slate-800" />
           </div>
@@ -130,7 +132,7 @@ export default function Dashboard() {
               );
             })()
           ) : null}
-        </>
+        </div>
       )}
 
       <section>
