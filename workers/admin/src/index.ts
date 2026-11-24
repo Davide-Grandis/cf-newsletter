@@ -1987,7 +1987,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     });
   }
 
-  const campMatch = /^\/api\/campaigns\/([^/]+)(?:\/(timeseries|sends|replay-failed))?$/.exec(p);
+  const campMatch = /^\/api\/campaigns\/([^/]+)(?:\/(timeseries|sends|links|replay-failed))?$/.exec(p);
   if (campMatch) {
     const id = campMatch[1];
     const sub = campMatch[2];
