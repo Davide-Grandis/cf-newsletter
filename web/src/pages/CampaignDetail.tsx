@@ -30,7 +30,7 @@ export default function CampaignDetail() {
   });
 
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [tab, setTab] = useState<'events' | 'logs'>('events');
+  const [tab, setTab] = useState<'events' | 'links' | 'logs'>('events');
   const deleteMutation = useMutation({
     mutationFn: () => api(`/api/campaigns/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
@@ -137,6 +137,7 @@ export default function CampaignDetail() {
       <section>
         <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 mb-4">
           <TabButton active={tab === 'events'} onClick={() => setTab('events')}>Events</TabButton>
+          {tracking !== 'off' && <TabButton active={tab === 'links'} onClick={() => setTab('links')}>Links</TabButton>}
           <TabButton active={tab === 'logs'} onClick={() => setTab('logs')}>Logs</TabButton>
         </div>
         {tab === 'events' ? (
@@ -162,6 +163,8 @@ export default function CampaignDetail() {
             </ResponsiveContainer>
           </div>
           )
+        ) : tab === 'links' && tracking !== 'off' ? (
+          <LinksTable campaignId={id} />
         ) : (
           <SendsTable campaignId={id} />
         )}
@@ -304,6 +307,45 @@ function pivotTimeseries(rows: TimeseriesRow[]): Record<string, number | string>
     buckets.set(r.bucket, b);
   }
   return Array.from(buckets.values());
+}
+
+// Links clicked in this campaign (from click tracking), most clicked first.
+function LinksTable({ campaignId }: { campaignId: string }) {
+  const links = useQuery({
+    queryKey: ['campaign-links', campaignId],
+    queryFn: () => api<{ items: Array<{ url: string; clicks: number; subscribers: number }> }>(`/api/campaigns/${campaignId}/links`),
+  });
+  const items = links.data?.items ?? [];
+  return (
+    <section>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">Links clicked in this campaign, most popular first.</p>
+      <div className="bg-white border border-slate-200 rounded overflow-hidden dark:bg-slate-900 dark:border-slate-800">
+        <table className="w-full text-sm table-fixed">
+          <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+            <tr>
+              <th className="text-left p-2">Link</th>
+              <th className="text-right p-2 w-24">Clicks</th>
+              <th className="text-right p-2 w-32" title="Different subscribers who clicked the link">Subscribers</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((l) => (
+              <tr key={l.url} className="border-t border-slate-100 dark:border-slate-800">
+                <td className="p-2 truncate">
+                  <a href={l.url} target="_blank" rel="noopener noreferrer" title={l.url} className="text-orange-600 hover:underline dark:text-orange-400">{l.url}</a>
+                </td>
+                <td className="p-2 text-right tabular-nums font-medium">{l.clicks.toLocaleString()}</td>
+                <td className="p-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{l.subscribers.toLocaleString()}</td>
+              </tr>
+            ))}
+            {links.data && items.length === 0 && (
+              <tr><td colSpan={3} className="p-4 text-center text-slate-500 dark:text-slate-400">No links clicked yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function SendsTable({ campaignId }: { campaignId: string }) {

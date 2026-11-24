@@ -2071,6 +2071,19 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       return Response.json({ items: results ?? [] });
     }
 
+    // Clicked links: each destination URL with its clicks and unique clickers,
+    // most clicked first (click events record the destination in url).
+    if (m === 'GET' && sub === 'links') {
+      const { results } = await env.DB
+        .prepare(
+          "SELECT url, COUNT(*) AS clicks, COUNT(DISTINCT subscriber_id) AS subscribers FROM events " +
+            "WHERE campaign_id = ? AND type = 'click' AND url IS NOT NULL GROUP BY url ORDER BY clicks DESC, subscribers DESC, url LIMIT 500",
+        )
+        .bind(id)
+        .all<{ url: string; clicks: number; subscribers: number }>();
+      return Response.json({ items: results ?? [] });
+    }
+
     if (m === 'GET' && sub === 'sends') {
       const status = url.searchParams.get('status');
       const offset = Math.max(0, Number(url.searchParams.get('cursor') ?? '0') || 0);

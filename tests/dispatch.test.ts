@@ -310,3 +310,20 @@ test('each sent email records whether it was tracked, and the campaign reports i
     ['s1@example.org:1', 's2@example.org:0', 's3@example.org:0']);
   assert.deepEqual(await counts(), { tracked: 1, recorded: 3 }, 'Partly tracked');
 });
+
+test('the links endpoint lists clicked URLs with clicks and unique clickers, most clicked first', async () => {
+  const f = fixture();
+  f.sqlite.exec("INSERT INTO admins (email, role, capability) VALUES ('root@example.com', 'super_admin', 'edit')");
+  f.addSubscribers(3);
+  f.sqlite.exec(`INSERT INTO events (campaign_id, subscriber_id, type, url) VALUES
+    ('c1', 1, 'click', 'https://example.com/a'), ('c1', 1, 'click', 'https://example.com/a'), ('c1', 2, 'click', 'https://example.com/a'),
+    ('c1', 3, 'click', 'https://example.com/b'), ('c1', 1, 'open', NULL), ('c1', 2, 'download', 'file.pdf')`);
+  const res = await admin.fetch(new Request('https://console.example.com/api/campaigns/c1/links', {
+    headers: { 'cf-access-authenticated-user-email': 'root@example.com' },
+  }), { DB: f.db } as AdminEnv, {} as ExecutionContext);
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json() as { items: unknown[] }).items, [
+    { url: 'https://example.com/a', clicks: 3, subscribers: 2 },
+    { url: 'https://example.com/b', clicks: 1, subscribers: 1 },
+  ]);
+});
