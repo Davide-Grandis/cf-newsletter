@@ -197,9 +197,10 @@ function StatGroup({ children }: { children: ReactNode }) {
 
 function Stat({ label, value, ok, bad, tip, highlight }: { label: string; value: ReactNode; ok?: boolean; bad?: boolean; tip?: string; highlight?: boolean }) {
   const cls = ok ? 'text-emerald-700 dark:text-emerald-400' : bad ? 'text-red-700 dark:text-red-400' : 'text-slate-900 dark:text-slate-100';
-  // Same card style as the dashboard; the highlighted card gets an accent frame.
+  // Same card style as the dashboard; the highlighted card gets a neutral accent
+  // (a stronger frame and a left bar), so only its status badge carries colour.
   const frame = highlight
-    ? 'border-orange-300 bg-orange-50 ring-1 ring-orange-200 dark:border-orange-700 dark:bg-orange-950/30 dark:ring-orange-900'
+    ? 'bg-white border-slate-300 border-l-4 border-l-slate-700 ring-1 ring-slate-200 dark:bg-slate-900 dark:border-slate-600 dark:border-l-slate-300 dark:ring-slate-700'
     : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800';
   return (
     <div className={`rounded-lg shadow-sm border p-4 ${frame}`} title={tip}>
