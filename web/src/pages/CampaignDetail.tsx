@@ -97,7 +97,7 @@ export default function CampaignDetail() {
         <>
           <StatRow title="Delivery">
             <StatGroup>
-              <Stat label="Status" highlight value={<CampaignStatus status={detail.data.campaign.status} />} />
+              <Stat label="Status" highlight value={<CampaignStatus status={detail.data.campaign.status} large />} />
             </StatGroup>
             <StatGroup>
               <Stat label="Subscribers" value={detail.data.campaign.total_recipients} />

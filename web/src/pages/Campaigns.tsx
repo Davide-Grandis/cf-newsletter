@@ -116,7 +116,7 @@ export const ACTIVE_CAMPAIGN_STATUSES = ['sending', 'scheduled', 'paused'];
 
 // Coloured badge for a campaign's lifecycle status. Campaigns actually sending
 // get an animated pulse so they stand out at a glance.
-export function CampaignStatus({ status }: { status: string }) {
+export function CampaignStatus({ status, large }: { status: string; large?: boolean }) {
   const cls: Record<string, string> = {
     queued: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
     sending: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
@@ -128,7 +128,7 @@ export function CampaignStatus({ status }: { status: string }) {
   const running = status === 'sending';
   return (
     <span
-      className={`inline-flex items-center gap-1 whitespace-nowrap text-xs px-2 py-0.5 rounded ${
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded ${large ? 'text-sm font-medium px-2.5 py-1' : 'text-xs px-2 py-0.5'} ${
         cls[status] ?? 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
       }`}
     >
