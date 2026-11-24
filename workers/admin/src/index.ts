@@ -23,7 +23,8 @@ import {
   dayStartSql,
   type WarmupState,
 } from '../../../shared/warmup';
-import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
+import { buildEmail, sanitizeDisplayName, type AttachmentPart } from '../../../shared/mime';
+import { consoleAccessEmail } from './access-email';
 import { sanitizeFooterHtml } from '../../../shared/footer';
 import { sanitizeMailMergeHtml, MAIL_MERGE_HTML_MAX, MAIL_MERGE_TEXT_MAX } from '../../../shared/mail-merge';
 import {
@@ -2961,6 +2962,25 @@ function extractAddr(header: string): string {
   return (m ? m[1]! : header).trim();
 }
 
+// Logo for console emails, attached inline: the uploaded branding logo when it
+// is a PNG or JPEG (WebP isn't shown by several mail clients), otherwise the
+// application's own logo. Best effort: on any failure the email has no logo.
+async function emailLogo(env: Env, consoleUrl: string): Promise<AttachmentPart | undefined> {
+  try {
+    const branded = await env.ASSETS_R2.get(BRANDING_LOGO_KEY);
+    const type = branded?.httpMetadata?.contentType ?? '';
+    if (branded && (type === 'image/png' || type === 'image/jpeg')) {
+      return { filename: type === 'image/png' ? 'logo.png' : 'logo.jpg', contentType: type, bytes: new Uint8Array(await branded.arrayBuffer()), contentId: 'logo', disposition: 'inline' };
+    }
+    await branded?.body.cancel();
+    const res = await env.ASSETS.fetch(new Request(`${consoleUrl}/favicon.png`));
+    if (!res.ok) return undefined;
+    return { filename: 'logo.png', contentType: 'image/png', bytes: new Uint8Array(await res.arrayBuffer()), contentId: 'logo', disposition: 'inline' };
+  } catch {
+    return undefined;
+  }
+}
+
 // Best-effort notification to a console user when they are added or removed.
 // Returns a warning string on failure (never throws) so user CRUD is not blocked.
 async function notifyUser(
@@ -2976,42 +2996,10 @@ async function notifyUser(
   try {
     const fromAddr = consoleSender(baseDomain);
     const consoleUrl = `https://console.${baseDomain}`;
-    const isSuper = role === 'super_admin';
-    const roleLabel = isSuper ? 'Super administrator' : 'Administrator';
-    let subject: string;
-    let text: string;
-    let html: string;
-    if (event === 'added') {
-      const access = isSuper
-        ? 'You have full access to the console, including all newsletters, user management and settings.'
-        : 'You can manage subscribers, authors and campaigns for the newsletters you have been assigned to.';
-      subject = 'You have been added to the Newsletter admin console';
-      text =
-        `Hello,\n\n` +
-        `You have been granted access to the Newsletter admin console as: ${roleLabel}.\n\n` +
-        `${access}\n\n` +
-        `Sign in here: ${consoleUrl}\n` +
-        `Access is via your organisation single sign-on at the link above.\n\n` +
-        `If you were not expecting this, please contact the sender of this email.\n`;
-      html =
-        `<p>Hello,</p>` +
-        `<p>You have been granted access to the <strong>Newsletter admin console</strong> as: <strong>${roleLabel}</strong>.</p>` +
-        `<p>${access}</p>` +
-        `<p><a href="${consoleUrl}">Sign in to the console</a> (via your organisation single sign-on).</p>` +
-        `<p style="color:#64748b;font-size:12px">If you were not expecting this, please contact the sender of this email.</p>`;
-    } else {
-      subject = 'Your access to the Newsletter admin console has been removed';
-      text =
-        `Hello,\n\n` +
-        `Your access to the Newsletter admin console (previously: ${roleLabel}) has been removed. ` +
-        `You will no longer be able to sign in at ${consoleUrl}.\n\n` +
-        `If you believe this is a mistake, please contact the sender of this email.\n`;
-      html =
-        `<p>Hello,</p>` +
-        `<p>Your access to the <strong>Newsletter admin console</strong> (previously: <strong>${roleLabel}</strong>) has been removed. ` +
-        `You will no longer be able to sign in at <a href="${consoleUrl}">${consoleUrl}</a>.</p>` +
-        `<p style="color:#64748b;font-size:12px">If you believe this is a mistake, please contact the sender of this email.</p>`;
-    }
+    const logo = await emailLogo(env, consoleUrl);
+    const { subject, text, html } = consoleAccessEmail({
+      event, role: role === 'super_admin' ? 'super_admin' : 'admin', email, consoleUrl, logoCid: logo?.contentId,
+    });
     const raw = buildEmail({
       from: fromAddr,
       to: email,
@@ -3019,7 +3007,7 @@ async function notifyUser(
       messageId: `${crypto.randomUUID()}@${baseDomain}`,
       text,
       html,
-      attachments: [],
+      attachments: logo ? [logo] : [],
     });
     await env.SEND_EMAIL.send(new EmailMessage(fromAddr, email, raw));
     return undefined;
