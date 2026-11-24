@@ -227,10 +227,18 @@ All served by the **tracker worker** (`workers/tracker/src/index.ts`) at
    using the `tracker` / `already_subscribed_notice` log entry, so the form
    can't be used to flood a subscriber's mailbox.
 
+   Likewise, if a confirmation was already sent to the address in the last
+   hour, nothing is sent and the row (and its token) is left unchanged, so the
+   earlier email's link keeps working and the form can't flood a stranger's
+   inbox with confirmations. The page is the same in every case.
+
 **`GET /verify/<id>?t=<confirm_token>`** (`handleVerify()`)
 
 1. Loads the row's `confirm_token`.
-2. No row, or token mismatch → **"Invalid link"** (400 / 403).
+2. No row, or token mismatch → **"Invalid link"** (400 / 403). Tokens carry
+   their issue time (`<ms>.<uuid>`); a link older than **7 days** gets a
+   **"Link expired"** page (410) asking to sign up again. Tokens issued before
+   links expired have no time and stay valid.
 3. `confirm_token IS NULL` already → **"Already confirmed"** success page (so a
    second click is harmless / idempotent).
 4. On a valid match, confirms:

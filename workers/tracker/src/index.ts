@@ -255,8 +255,15 @@ async function handleSubscribe(
       return htmlResponse(checkInboxPage(email));
     }
 
+    // A confirmation already went to this address in the last hour: send
+    // nothing and keep its token, so that email's link still works. Same page,
+    // so the form can't be used to flood a mailbox with confirmations.
+    if (existing && await recentlySent(env, nl.id, existing.id, CONFIRMATION_SENT_EVENT, '-1 hour')) {
+      return htmlResponse(checkInboxPage(email));
+    }
+
     // New subscriber or unconfirmed/inactive: upsert and send confirmation.
-    const confirmToken = crypto.randomUUID();
+    const confirmToken = issueConfirmToken();
     const unsubToken = crypto.randomUUID();
     const res = await env.DB
       .prepare(
@@ -317,6 +324,33 @@ function checkInboxPage(email: string): string {
 }
 
 const ALREADY_SUBSCRIBED_EVENT = 'already_subscribed_notice';
+// Logged (by writeLog, source 'tracker') after each confirmation email.
+const CONFIRMATION_SENT_EVENT = 'subscriber.confirmation_sent';
+// Confirmation links expire after this long.
+const CONFIRM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Whether a tracker email of this kind went to the subscriber within `window` (SQLite modifier). */
+async function recentlySent(env: Env, newsletterId: string, subscriberId: number, event: string, window: string): Promise<boolean> {
+  const row = await env.DB
+    .prepare(
+      "SELECT 1 AS x FROM logs WHERE source = 'tracker' AND event = ? AND newsletter_id = ? " +
+        "AND json_extract(detail, '$.subscriberId') = ? AND ts > datetime('now', ?) LIMIT 1",
+    )
+    .bind(event, newsletterId, subscriberId, window)
+    .first();
+  return row !== null;
+}
+
+/** A confirmation token carrying its issue time ("<ms>.<uuid>"), so links can expire. */
+function issueConfirmToken(now = Date.now()): string {
+  return `${now}.${crypto.randomUUID()}`;
+}
+
+/** Tokens issued before links expired have no time and stay valid. */
+function confirmTokenExpired(token: string, now = Date.now()): boolean {
+  const issued = /^(\d{13})\./.exec(token);
+  return issued ? now - Number(issued[1]) > CONFIRM_TTL_MS : false;
+}
 
 /**
  * Tell an existing subscriber that someone (probably they) tried to subscribe
@@ -325,14 +359,7 @@ const ALREADY_SUBSCRIBED_EVENT = 'already_subscribed_notice';
  */
 async function notifyAlreadySubscribed(env: Env, cfg: Env, nl: NewsletterRow, email: string, subscriberId: number, token: string): Promise<void> {
   if (!env.SEND_EMAIL) return;
-  const recent = await env.DB
-    .prepare(
-      "SELECT 1 AS x FROM logs WHERE source = 'tracker' AND event = ? AND newsletter_id = ? " +
-        "AND json_extract(detail, '$.subscriberId') = ? AND ts > datetime('now', '-1 day') LIMIT 1",
-    )
-    .bind(ALREADY_SUBSCRIBED_EVENT, nl.id, subscriberId)
-    .first();
-  if (recent) return;
+  if (await recentlySent(env, nl.id, subscriberId, ALREADY_SUBSCRIBED_EVENT, '-1 day')) return;
   const base = (cfg.TRACKING_BASE_URL ?? '').replace(/\/+$/, '');
   const unsubUrl = unsubscribeUrl(base, subscriberId, token);
   const fromHeader = nl.from_address || defaultSender(cfg.BASE_DOMAIN ?? '');
@@ -384,6 +411,12 @@ async function handleVerify(env: Env, sub: number, token: string): Promise<Respo
   }
   if (row.confirm_token !== token) {
     return htmlResponse(pageShell('Invalid link', '<p>This confirmation link is invalid or has expired.</p>'), 403);
+  }
+  if (confirmTokenExpired(token)) {
+    return htmlResponse(
+      pageShell('Link expired', '<p>This confirmation link has expired. Please sign up again to receive a new one.</p>'),
+      410,
+    );
   }
   // Confirm: clear the pending token, mark verified and (re)activate — this also
   // handles resubscribing a previously unsubscribed/bounced address.

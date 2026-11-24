@@ -39,7 +39,13 @@ function fixture() {
     return { status: res.status, html: await res.text() };
   };
   const row = (sql: string, ...p: unknown[]) => sqlite.prepare(sql).get(...p as never[]) as Record<string, unknown>;
-  return { signup, sent, row };
+  const sql = (q: string, ...p: unknown[]) => sqlite.prepare(q).run(...p as never[]);
+  const verify = async (id: number, token: string) => {
+    const res = await tracker.fetch(new Request(`https://track.example.com/verify/${id}?t=${encodeURIComponent(token)}`), env,
+      { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext);
+    return { status: res.status, html: await res.text() };
+  };
+  return { signup, sent, row, sql, verify };
 }
 
 const page = (html: string) => html.replace(/[\s\S]*<main class="card">|<\/main>[\s\S]*/g, '').replace(/<strong>[^<]*<\/strong>/, '<strong>EMAIL</strong>');
@@ -74,4 +80,33 @@ test('new and pending signups still get a confirmation email', async () => {
   assert.deepEqual(f.sent.map((m) => m.to), ['new@example.org', 'pending@example.org']);
   assert.ok(f.sent.every((m) => /Subject: Confirm your subscription to News/.test(m.raw)));
   assert.notEqual(f.row("SELECT confirm_token FROM subscribers WHERE email = 'pending@example.org'").confirm_token, 'old-confirm');
+});
+
+test('a second signup within the hour sends no new confirmation and keeps the first link working', async () => {
+  const f = fixture();
+  await f.signup('new@example.org');
+  const first = f.row("SELECT id, confirm_token FROM subscribers WHERE email = 'new@example.org'");
+  const again = await f.signup('new@example.org', 'Other');
+  assert.equal(again.status, 200);
+  assert.match(again.html, /Almost there/);
+  assert.equal(f.sent.length, 1, 'Only the first confirmation was sent');
+  assert.equal(f.row("SELECT confirm_token FROM subscribers WHERE email = 'new@example.org'").confirm_token, first.confirm_token);
+  const res = await f.verify(Number(first.id), String(first.confirm_token));
+  assert.equal(res.status, 200);
+  assert.match(res.html, /confirmed/i);
+});
+
+test('confirmation links expire after 7 days; links issued before expiry existed still work', async () => {
+  const f = fixture();
+  const old = `${Date.now() - 8 * 24 * 60 * 60 * 1000}.${crypto.randomUUID()}`;
+  f.sql("UPDATE subscribers SET confirm_token = ? WHERE email = 'pending@example.org'", old);
+  const id = Number(f.row("SELECT id FROM subscribers WHERE email = 'pending@example.org'").id);
+  const expired = await f.verify(id, old);
+  assert.equal(expired.status, 410);
+  assert.match(expired.html, /expired/i);
+  assert.equal(f.row('SELECT confirm_token FROM subscribers WHERE id = ?', id).confirm_token, old, 'Not confirmed');
+  const legacy = crypto.randomUUID();
+  f.sql('UPDATE subscribers SET confirm_token = ? WHERE id = ?', legacy, id);
+  assert.equal((await f.verify(id, legacy)).status, 200);
+  assert.equal(f.row('SELECT confirm_token FROM subscribers WHERE id = ?', id).confirm_token, null);
 });
