@@ -95,10 +95,10 @@ export default function CampaignDetail() {
 
       {detail.data && (
         <>
-          <StatRow title="Delivery" className="grid-cols-1 xl:grid-cols-[9rem_1fr_1fr]">
-            <div className="p-2">
+          <StatRow title="Delivery">
+            <StatGroup>
               <Stat label="Status" highlight value={<CampaignStatus status={detail.data.campaign.status} />} />
-            </div>
+            </StatGroup>
             <StatGroup>
               <Stat label="Subscribers" value={detail.data.campaign.total_recipients} />
               <Stat label="Dispatched" tip="Handed off for sending so far, on any day" value={detail.data.campaign.released_count ?? 0} ok />
@@ -111,16 +111,16 @@ export default function CampaignDetail() {
             </StatGroup>
           </StatRow>
           <ReleaseNote campaign={detail.data.campaign} />
-          <StatRow title="Analytics" className={tracking === 'off' ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}>
+          <StatRow title="Analytics">
             {tracking !== 'off' && (
-              <StatGroup cols={2}>
+              <StatGroup>
                 <Stat label="Opens" tip="From open tracking" value={evt.open ?? 0} sub={openClickSub} />
                 <Stat label="Clicks" tip="From click tracking" value={evt.click ?? 0} sub={openClickSub} />
               </StatGroup>
             )}
             {/* Downloads are counted only in link mode, where attachments are
                 delivered as download links instead of inside each email. */}
-            <StatGroup cols={linkMode ? 2 : 1}>
+            <StatGroup>
               <Stat label="Unsubs" value={evt.unsubscribe ?? 0} />
               {linkMode && <Stat label="Downloads" tip="Times subscribers downloaded the attachments from their links" value={evt.download ?? 0} />}
             </StatGroup>
@@ -212,23 +212,23 @@ function trackingState(campaign: Detail['campaign'] | undefined): TrackingState 
   return tracked < recorded ? 'partial' : 'on';
 }
 
-function StatRow({ title, className, children }: { title: string; className: string; children: ReactNode }) {
+function StatRow({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
       <div className="flex items-center gap-3 mb-3">
         <h2 className="text-base font-medium">{title}</h2>
         <div className="flex-1 border-t border-slate-200 dark:border-slate-800" />
       </div>
-      <div className={`grid gap-4 ${className}`}>{children}</div>
+      <div className="flex flex-wrap items-stretch gap-4">{children}</div>
     </div>
   );
 }
 
-// A light background that groups related cards within a row.
-function StatGroup({ children, cols = 3 }: { children: ReactNode; cols?: 1 | 2 | 3 }) {
-  const grid = cols === 1 ? 'sm:grid-cols-1' : cols === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3';
+// A light background that groups related cards within a row. It is only as
+// wide as its cards (fixed width), and wraps them when space runs out.
+function StatGroup({ children }: { children: ReactNode }) {
   return (
-    <div className={`grid grid-cols-1 ${grid} gap-3 rounded-xl bg-slate-100/70 p-2 dark:bg-slate-800/30`}>{children}</div>
+    <div className="flex flex-wrap gap-3 rounded-xl bg-slate-100/70 p-2 dark:bg-slate-800/30">{children}</div>
   );
 }
 
@@ -240,7 +240,7 @@ function Stat({ label, value, ok, bad, tip, highlight, sub }: { label: string; v
     ? 'bg-white border-slate-300 border-l-4 border-l-slate-700 ring-1 ring-slate-200 dark:bg-slate-900 dark:border-slate-600 dark:border-l-slate-300 dark:ring-slate-700'
     : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800';
   return (
-    <div className={`rounded-lg shadow-sm border p-4 ${frame}`} title={tip}>
+    <div className={`w-36 rounded-lg shadow-sm border p-4 ${frame}`} title={tip}>
       <div className={`text-xs uppercase tracking-wide whitespace-nowrap ${highlight ? 'font-bold text-orange-600 dark:text-orange-400' : 'text-slate-500 dark:text-slate-400'}`}>{label}</div>
       <div className={`text-2xl font-semibold mt-1 whitespace-nowrap ${cls}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
