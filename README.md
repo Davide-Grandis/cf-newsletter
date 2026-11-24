@@ -39,32 +39,12 @@ Before running the browser-based installer, the target Cloudflare account must h
 - Zero Trust Access available.
 
 The installer uses **Connect to Cloudflare** for temporary installation/update
-authorization. Customers do not register an OAuth application or create an
-installation API token. Their Cloudflare account must allow public OAuth
-authorization, and their role must permit the requested deployment operations.
-Installation and hosted updates share one publisher OAuth client. Both request
-the broader installation permissions, including Workers Admin, even for routine
-updates; OAuth does not grant access beyond the authorizing user's effective role.
-The installer detects installation versus update automatically. Account choices
-come from OAuth: a single account is selected automatically, or you choose by
-account name when several are authorized. No manual account ID is required.
-Fresh installs offer the selected account's eligible zones in a dropdown.
-Updates skip zone selection and preserve the domain from the installed settings.
-
-Fresh installation still requires a **runtime automation token**, restricted
+authorization. The Cloudflare account must allow public OAuth
+authorization (default). 
+Fresh installation requires a **runtime automation token**, restricted
 to the target account and zone: Account Email Sending Read, Workers Scripts
 Edit, Turnstile Edit, and Zero Trust Edit; Zone Read, Email Routing Rules Edit, and Analytics
-Read. This token is installed as encrypted Worker secrets on fresh installs.
-
-OAuth installation authorization is temporary and is not saved for future
-updates. Keep the runtime token active for application automation.
-Fresh installs request optional Turnstile authorization; setup failure is
-non-fatal and leaves a warning directing the administrator to Settings > Subscribe.
-Existing installations must upgrade Workers Scripts from Read to Edit and add
-Account Turnstile Edit to this token for Turnstile management. Settings >
-Subscribe uses the stored credential and does not ask for a token.
-
-Note: no GitHub account or repository is required.
+Read. This token is installed as encrypted Worker secrets on fresh installs and is required for application automation.
 
 ### Installer
 
