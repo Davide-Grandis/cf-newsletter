@@ -58,7 +58,7 @@ export function consoleAccessEmail(input: AccessEmailInput): AccessEmail {
       `<p style="margin:0 0 24px">${esc(access)}</p>` +
       `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px"><tr>` +
       `<td bgcolor="${ACCENT}" style="border-radius:6px">` +
-      `<a href="${url}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px">Open the console</a>` +
+      `<a href="${url}" style="display:inline-block;padding:9px 20px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px">Open the console</a>` +
       `</td></tr></table>` +
       `<p style="margin:0;font-size:13px;color:#64748b">Sign in with your organisation's single sign-on, using <strong style="color:#334155">${esc(input.email)}</strong>. ` +
       `If the button doesn't work, open <a href="${url}" style="color:${ACCENT}">${url}</a>.</p>`
