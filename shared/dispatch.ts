@@ -306,12 +306,12 @@ export async function completeSend(
   sendId: number,
   campaignId: string,
   outcome: 'sent' | 'failed',
-  detail: { messageId?: string; error?: string } = {},
+  detail: { messageId?: string; error?: string; tracked?: boolean } = {},
 ): Promise<boolean> {
   const res = outcome === 'sent'
     ? await db
-      .prepare("UPDATE sends SET status = 'sent', sent_at = datetime('now'), message_id = ?, error = NULL, batch_id = NULL WHERE id = ? AND status = 'pending'")
-      .bind(detail.messageId ?? null, sendId)
+      .prepare("UPDATE sends SET status = 'sent', sent_at = datetime('now'), message_id = ?, tracked = ?, error = NULL, batch_id = NULL WHERE id = ? AND status = 'pending'")
+      .bind(detail.messageId ?? null, detail.tracked ? 1 : 0, sendId)
       .run()
     : await db
       .prepare("UPDATE sends SET status = 'failed', error = ?, batch_id = NULL WHERE id = ? AND status = 'pending'")

@@ -2017,7 +2017,11 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
             // dispatcher so far (sent, failed, bounced or in a batch being sent),
             // and those still waiting for a later day's budget or a retry.
             "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND (s.status <> 'pending' OR s.batch_id IS NOT NULL)) AS released_count, " +
-            "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND s.status = 'pending' AND s.batch_id IS NULL) AS paused_count " +
+            "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND s.status = 'pending' AND s.batch_id IS NULL) AS paused_count, " +
+            // Open/click tracking per sent email: how many were tracked, and how
+            // many have a recorded tracking state (sends before 2.6.5 have none).
+            "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND s.tracked = 1) AS tracked_count, " +
+            "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND s.tracked IS NOT NULL) AS tracking_recorded_count " +
             'FROM campaigns c LEFT JOIN newsletters n ON n.id = c.newsletter_id WHERE c.id = ?',
         )
         .bind(id)

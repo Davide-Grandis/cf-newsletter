@@ -341,7 +341,7 @@ async function sendBatch(env: Env, cache: Map<string, CampaignEntry>, campaignId
 
       const email = new EmailMessage(fromAddr, r.email, raw);
       await env.SEND_EMAIL.send(email);
-      await completeSend(env.DB, r.send_id, campaignId, 'sent', { messageId });
+      await completeSend(env.DB, r.send_id, campaignId, 'sent', { messageId, tracked: consents.has(r.subscriber_id) });
       sentInBatch++;
       await writeLog(env.DB, {
         source: 'consumer',

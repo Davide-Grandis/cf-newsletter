@@ -288,3 +288,25 @@ test('the campaign stores its delivery state: sending only while a batch is out,
   assert.deepEqual(await state(), { stored: 'done/-', detail: 'done', list: 'done' });
   assert.equal(f.delivered.length, 6);
 });
+
+test('each sent email records whether it was tracked, and the campaign reports it', async () => {
+  const f = fixture({ batchSize: 10 });
+  f.sqlite.exec("INSERT INTO admins (email, role, capability) VALUES ('root@example.com', 'super_admin', 'edit')");
+  f.addSubscribers(3);
+  const counts = async () => {
+    const res = await admin.fetch(new Request('https://console.example.com/api/campaigns/c1', {
+      headers: { 'cf-access-authenticated-user-email': 'root@example.com' },
+    }), { DB: f.db } as AdminEnv, {} as ExecutionContext);
+    const { campaign } = await res.json() as { campaign: Record<string, unknown> };
+    return { tracked: campaign.tracked_count, recorded: campaign.tracking_recorded_count };
+  };
+  assert.deepEqual(await counts(), { tracked: 0, recorded: 0 }, 'Nothing sent yet: tracking unknown');
+  // Tracking on globally and for the newsletter; only s1 consented.
+  f.sqlite.exec("INSERT INTO settings (key, value) VALUES ('TRACKING_ENABLED', 'true'); UPDATE newsletters SET tracking_enabled = 1; UPDATE subscribers SET tracking_consent = 1 WHERE email = 's1@example.org'");
+  await f.ingest();
+  await f.drain(true);
+  assert.equal(f.delivered.length, 3);
+  assert.deepEqual(f.rows("SELECT u.email, s.tracked FROM sends s JOIN subscribers u ON u.id = s.subscriber_id ORDER BY u.email").map((r) => `${r.email}:${r.tracked}`),
+    ['s1@example.org:1', 's2@example.org:0', 's3@example.org:0']);
+  assert.deepEqual(await counts(), { tracked: 1, recorded: 3 }, 'Partly tracked');
+});

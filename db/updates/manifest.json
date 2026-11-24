@@ -64,5 +64,11 @@
     "file": "0011_campaign_delivery_state.sql",
     "description": "Record whether an in-progress campaign is sending, scheduled for a later day's budget, or paused",
     "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('campaigns') WHERE name = 'delivery_state'"
+  },
+  {
+    "id": "0012_send_tracked",
+    "file": "0012_send_tracked.sql",
+    "description": "Record whether each sent email had open and click tracking",
+    "checkSql": "SELECT COUNT(*) AS present FROM pragma_table_info('sends') WHERE name = 'tracked'"
   }
 ]

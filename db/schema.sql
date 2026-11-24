@@ -149,6 +149,10 @@ CREATE TABLE IF NOT EXISTS sends (
   claimed_at      TEXT,
   attempts        INTEGER NOT NULL DEFAULT 0,
   next_attempt_at TEXT,
+  -- 1 when the sent email had open/click tracking (global switch, newsletter
+  -- setting and subscriber consent all on), 0 when not; NULL for sends recorded
+  -- before this was tracked.
+  tracked         INTEGER CHECK (tracked IN (0,1)),
   UNIQUE (campaign_id, subscriber_id)
 );
 CREATE INDEX IF NOT EXISTS idx_sends_campaign_status ON sends(campaign_id, status);

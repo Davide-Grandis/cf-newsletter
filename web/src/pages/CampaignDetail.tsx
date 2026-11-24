@@ -40,6 +40,9 @@ export default function CampaignDetail() {
   });
 
   const evt = Object.fromEntries((detail.data?.events ?? []).map((e) => [e.type, e.n]));
+  const tracking = trackingState(detail.data?.campaign);
+  const tracked = detail.data?.campaign.tracked_count ?? 0;
+  const openClickSub = tracking === 'partial' ? `of ${tracked.toLocaleString()} tracked email${tracked === 1 ? '' : 's'}` : undefined;
   const chartData = pivotTimeseries(ts.data?.items ?? []);
 
   const refreshing = detail.isFetching || ts.isFetching;
@@ -107,13 +110,16 @@ export default function CampaignDetail() {
             </StatGroup>
           </StatRow>
           <ReleaseNote campaign={detail.data.campaign} />
-          <StatRow title="Analytics" className="grid-cols-2 sm:grid-cols-5">
-            <Stat label="Opens" value={evt.open ?? 0} />
-            <Stat label="Clicks" value={evt.click ?? 0} />
+          <StatRow title="Analytics" className={tracking === 'off' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-5'}>
+            {tracking !== 'off' && <Stat label="Opens" value={evt.open ?? 0} sub={openClickSub} />}
+            {tracking !== 'off' && <Stat label="Clicks" value={evt.click ?? 0} sub={openClickSub} />}
             <Stat label="Unsubs" value={evt.unsubscribe ?? 0} />
             <Stat label="Downloads" value={evt.download ?? 0} />
             <Stat label="Attachments" value={detail.data.campaign.attachment_count} />
           </StatRow>
+          {tracking === 'off' && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 -mt-3">Open and click tracking was off for this campaign.</p>
+          )}
         </>
       )}
 
@@ -137,6 +143,11 @@ export default function CampaignDetail() {
           <TabButton active={tab === 'logs'} onClick={() => setTab('logs')}>Logs</TabButton>
         </div>
         {tab === 'events' ? (
+          chartData.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded p-6 text-center text-sm text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400">
+              No events for this campaign yet.
+            </div>
+          ) : (
           <div className="h-72 bg-white border border-slate-200 rounded p-2 dark:bg-slate-900 dark:border-slate-800">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
@@ -145,14 +156,15 @@ export default function CampaignDetail() {
                 <YAxis fontSize={10} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="open" stackId="a" fill="#10b981" />
-                <Bar dataKey="click" stackId="a" fill="#3b82f6" />
+                {tracking !== 'off' && <Bar dataKey="open" stackId="a" fill="#10b981" />}
+                {tracking !== 'off' && <Bar dataKey="click" stackId="a" fill="#3b82f6" />}
                 <Bar dataKey="bounce" stackId="a" fill="#f59e0b" />
                 <Bar dataKey="unsubscribe" stackId="a" fill="#94a3b8" />
                 <Bar dataKey="download" stackId="a" fill="#8b5cf6" />
               </BarChart>
             </ResponsiveContainer>
           </div>
+          )
         ) : (
           <SendsTable campaignId={id} />
         )}
@@ -176,6 +188,17 @@ function ReleaseNote({ campaign }: { campaign: Detail['campaign'] }) {
   );
 }
 
+// Whether this campaign's sent emails had open/click tracking: 'unknown' when
+// no tracking state was recorded (sent before 2.6.5, or nothing sent yet).
+type TrackingState = 'unknown' | 'off' | 'partial' | 'on';
+function trackingState(campaign: Detail['campaign'] | undefined): TrackingState {
+  const recorded = campaign?.tracking_recorded_count ?? 0;
+  const tracked = campaign?.tracked_count ?? 0;
+  if (recorded === 0) return 'unknown';
+  if (tracked === 0) return 'off';
+  return tracked < recorded ? 'partial' : 'on';
+}
+
 function StatRow({ title, className, children }: { title: string; className: string; children: ReactNode }) {
   return (
     <div>
@@ -195,7 +218,7 @@ function StatGroup({ children }: { children: ReactNode }) {
   );
 }
 
-function Stat({ label, value, ok, bad, tip, highlight }: { label: string; value: ReactNode; ok?: boolean; bad?: boolean; tip?: string; highlight?: boolean }) {
+function Stat({ label, value, ok, bad, tip, highlight, sub }: { label: string; value: ReactNode; ok?: boolean; bad?: boolean; tip?: string; highlight?: boolean; sub?: string }) {
   const cls = ok ? 'text-emerald-700 dark:text-emerald-400' : bad ? 'text-red-700 dark:text-red-400' : 'text-slate-900 dark:text-slate-100';
   // Same card style as the dashboard; the highlighted card gets a neutral accent
   // (a stronger frame and a left bar), so only its status badge carries colour.
@@ -208,6 +231,7 @@ function Stat({ label, value, ok, bad, tip, highlight }: { label: string; value:
       <div className={`text-2xl font-semibold mt-1 whitespace-nowrap ${cls}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
+      {sub && <div className="text-xs text-slate-400 mt-0.5 whitespace-nowrap dark:text-slate-500">{sub}</div>}
     </div>
   );
 }

@@ -123,6 +123,10 @@ export interface Campaign {
   paused_count?: number;
   next_release_at?: string | null;
   dispatch_paused?: boolean;
+  // Campaign detail only: sent emails that had open/click tracking, and sent
+  // emails with a recorded tracking state (0 for campaigns sent before 2.6.5).
+  tracked_count?: number;
+  tracking_recorded_count?: number;
 }
 
 export interface CampaignDetail {
