@@ -2074,14 +2074,25 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     // Clicked links: each destination URL with its clicks and unique clickers,
     // most clicked first (click events record the destination in url).
     if (m === 'GET' && sub === 'links') {
-      const { results } = await env.DB
-        .prepare(
-          "SELECT url, COUNT(*) AS clicks, COUNT(DISTINCT subscriber_id) AS subscribers FROM events " +
-            "WHERE campaign_id = ? AND type = 'click' AND url IS NOT NULL GROUP BY url ORDER BY clicks DESC, subscribers DESC, url LIMIT 500",
-        )
-        .bind(id)
-        .all<{ url: string; clicks: number; subscribers: number }>();
-      return Response.json({ items: results ?? [] });
+      const offset = Math.max(0, Number(url.searchParams.get('cursor') ?? '0') || 0);
+      const limit = clamp(Number(url.searchParams.get('limit') ?? '50'), 1, 200);
+      const [page, count] = await Promise.all([
+        env.DB
+          .prepare(
+            "SELECT url, COUNT(*) AS clicks, COUNT(DISTINCT subscriber_id) AS subscribers FROM events " +
+              "WHERE campaign_id = ? AND type = 'click' AND url IS NOT NULL GROUP BY url " +
+              'ORDER BY clicks DESC, subscribers DESC, url LIMIT ? OFFSET ?',
+          )
+          .bind(id, limit, offset)
+          .all<{ url: string; clicks: number; subscribers: number }>(),
+        env.DB
+          .prepare("SELECT COUNT(DISTINCT url) AS n FROM events WHERE campaign_id = ? AND type = 'click' AND url IS NOT NULL")
+          .bind(id)
+          .first<{ n: number }>(),
+      ]);
+      const items = page.results ?? [];
+      const total = count?.n ?? 0;
+      return Response.json({ items, total, nextCursor: offset + items.length < total ? offset + limit : null });
     }
 
     if (m === 'GET' && sub === 'sends') {

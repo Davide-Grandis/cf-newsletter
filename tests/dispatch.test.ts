@@ -322,8 +322,14 @@ test('the links endpoint lists clicked URLs with clicks and unique clickers, mos
     headers: { 'cf-access-authenticated-user-email': 'root@example.com' },
   }), { DB: f.db } as AdminEnv, {} as ExecutionContext);
   assert.equal(res.status, 200);
-  assert.deepEqual((await res.json() as { items: unknown[] }).items, [
+  const body = await res.json() as { items: unknown[]; total: number; nextCursor: number | null };
+  assert.deepEqual(body.items, [
     { url: 'https://example.com/a', clicks: 3, subscribers: 2 },
     { url: 'https://example.com/b', clicks: 1, subscribers: 1 },
   ]);
+  assert.equal(body.total, 2);
+  const page2 = await (await admin.fetch(new Request('https://console.example.com/api/campaigns/c1/links?limit=1&cursor=1', {
+    headers: { 'cf-access-authenticated-user-email': 'root@example.com' },
+  }), { DB: f.db } as AdminEnv, {} as ExecutionContext)).json() as { items: Array<{ url: string }>; total: number; nextCursor: number | null };
+  assert.deepEqual({ urls: page2.items.map((l) => l.url), total: page2.total, next: page2.nextCursor }, { urls: ['https://example.com/b'], total: 2, next: null }, 'Pages through the links in order');
 });

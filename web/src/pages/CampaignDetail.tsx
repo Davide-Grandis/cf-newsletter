@@ -311,9 +311,14 @@ function pivotTimeseries(rows: TimeseriesRow[]): Record<string, number | string>
 
 // Links clicked in this campaign (from click tracking), most clicked first.
 function LinksTable({ campaignId }: { campaignId: string }) {
+  const [page, setPage] = useState(0);
   const links = useQuery({
-    queryKey: ['campaign-links', campaignId],
-    queryFn: () => api<{ items: Array<{ url: string; clicks: number; subscribers: number }> }>(`/api/campaigns/${campaignId}/links`),
+    queryKey: ['campaign-links', campaignId, page],
+    placeholderData: keepPreviousData,
+    queryFn: () => {
+      const sp = new URLSearchParams({ limit: String(PAGE_SIZE), cursor: String(page * PAGE_SIZE) });
+      return api<Page<{ url: string; clicks: number; subscribers: number }>>(`/api/campaigns/${campaignId}/links?${sp.toString()}`);
+    },
   });
   const items = links.data?.items ?? [];
   return (
@@ -343,6 +348,15 @@ function LinksTable({ campaignId }: { campaignId: string }) {
             )}
           </tbody>
         </table>
+      </div>
+      <div className="mt-2">
+        <Pagination
+          page={page}
+          total={links.data?.total ?? 0}
+          itemCount={items.length}
+          busy={links.isFetching}
+          onPage={setPage}
+        />
       </div>
     </section>
   );
