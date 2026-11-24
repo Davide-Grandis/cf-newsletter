@@ -41,6 +41,7 @@ export default function CampaignDetail() {
 
   const evt = Object.fromEntries((detail.data?.events ?? []).map((e) => [e.type, e.n]));
   const tracking = trackingState(detail.data?.campaign);
+  const linkMode = detail.data?.campaign.link_mode === 1;
   const tracked = detail.data?.campaign.tracked_count ?? 0;
   const openClickSub = tracking === 'partial' ? `of ${tracked.toLocaleString()} tracked` : undefined;
   const chartData = pivotTimeseries(ts.data?.items ?? []);
@@ -110,17 +111,18 @@ export default function CampaignDetail() {
             </StatGroup>
           </StatRow>
           <ReleaseNote campaign={detail.data.campaign} />
-          <StatRow title="Analytics" className={tracking === 'off' ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-[2fr_3fr]'}>
+          <StatRow title="Analytics" className={tracking === 'off' ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}>
             {tracking !== 'off' && (
               <StatGroup cols={2}>
                 <Stat label="Opens" tip="From open tracking" value={evt.open ?? 0} sub={openClickSub} />
                 <Stat label="Clicks" tip="From click tracking" value={evt.click ?? 0} sub={openClickSub} />
               </StatGroup>
             )}
-            <StatGroup>
+            {/* Downloads are counted only in link mode, where attachments are
+                delivered as download links instead of inside each email. */}
+            <StatGroup cols={linkMode ? 2 : 1}>
               <Stat label="Unsubs" value={evt.unsubscribe ?? 0} />
-              <Stat label="Downloads" value={evt.download ?? 0} />
-              <Stat label="Attachments" value={detail.data.campaign.attachment_count} />
+              {linkMode && <Stat label="Downloads" tip="Times subscribers downloaded the attachments from their links" value={evt.download ?? 0} />}
             </StatGroup>
           </StatRow>
           {tracking === 'off' && (
@@ -131,7 +133,12 @@ export default function CampaignDetail() {
 
       {detail.data && detail.data.attachments.length > 0 && (
         <section>
-          <h2 className="text-base font-medium mb-2">Attachments</h2>
+          <h2 className="text-base font-medium mb-2">
+            Attachments ({detail.data.attachments.length})
+            <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+              {linkMode ? 'sent as download links' : 'attached to each email'}
+            </span>
+          </h2>
           <ul className="bg-white border border-slate-200 rounded divide-y divide-slate-100 text-sm dark:bg-slate-900 dark:border-slate-800 dark:divide-slate-800">
             {detail.data.attachments.map((a) => (
               <li key={a.id} className="p-2 flex justify-between">
@@ -218,9 +225,10 @@ function StatRow({ title, className, children }: { title: string; className: str
 }
 
 // A light background that groups related cards within a row.
-function StatGroup({ children, cols = 3 }: { children: ReactNode; cols?: 2 | 3 }) {
+function StatGroup({ children, cols = 3 }: { children: ReactNode; cols?: 1 | 2 | 3 }) {
+  const grid = cols === 1 ? 'sm:grid-cols-1' : cols === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3';
   return (
-    <div className={`grid grid-cols-1 ${cols === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3 rounded-xl bg-slate-100/70 p-2 dark:bg-slate-800/30`}>{children}</div>
+    <div className={`grid grid-cols-1 ${grid} gap-3 rounded-xl bg-slate-100/70 p-2 dark:bg-slate-800/30`}>{children}</div>
   );
 }
 
