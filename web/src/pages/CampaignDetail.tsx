@@ -204,7 +204,7 @@ function Stat({ label, value, ok, bad, tip, highlight }: { label: string; value:
     : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800';
   return (
     <div className={`rounded-lg shadow-sm border p-4 ${frame}`} title={tip}>
-      <div className={`text-xs uppercase tracking-wide whitespace-nowrap ${highlight ? 'font-bold text-slate-700 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>{label}</div>
+      <div className={`text-xs uppercase tracking-wide whitespace-nowrap ${highlight ? 'font-bold text-orange-600 dark:text-orange-400' : 'text-slate-500 dark:text-slate-400'}`}>{label}</div>
       <div className={`text-2xl font-semibold mt-1 whitespace-nowrap ${cls}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
