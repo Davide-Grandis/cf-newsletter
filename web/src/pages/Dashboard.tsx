@@ -78,7 +78,10 @@ export default function Dashboard() {
         {!isSuper && <Card label="Scheduled to send" value={data.campaigns?.scheduled ?? 0} sub="in your newsletters" />}
       </div>
 
-      <h2 className="text-base font-medium">Events in the last 7 days</h2>
+      <div className="flex items-center gap-3">
+            <h2 className="text-base font-medium">Events in the last 7 days</h2>
+            <div className="flex-1 border-t border-slate-200 dark:border-slate-800" />
+          </div>
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card label="Open events" value={evt.open ?? 0} />
         <Card label="Click events" value={evt.click ?? 0} />
@@ -90,7 +93,10 @@ export default function Dashboard() {
 
       {isSuper && (
         <>
-          <h2 className="text-base font-medium">Status / warm-up</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-medium">Status / warm-up</h2>
+            <div className="flex-1 border-t border-slate-200 dark:border-slate-800" />
+          </div>
           {sending.isLoading ? (
             <div className="text-sm text-slate-500 dark:text-slate-400">Loading…</div>
           ) : sending.error ? (
