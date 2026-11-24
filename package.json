@@ -1,7 +1,7 @@
 {
   "name": "cf-newsletter",
   "private": true,
-  "version": "2.6.4",
+  "version": "2.6.5",
   "license": "MIT",
   "type": "module",
   "dependencies": {
