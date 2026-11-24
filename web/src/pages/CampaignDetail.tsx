@@ -42,8 +42,6 @@ export default function CampaignDetail() {
   const evt = Object.fromEntries((detail.data?.events ?? []).map((e) => [e.type, e.n]));
   const tracking = trackingState(detail.data?.campaign);
   const linkMode = detail.data?.campaign.link_mode === 1;
-  const tracked = detail.data?.campaign.tracked_count ?? 0;
-  const openClickSub = tracking === 'partial' ? `of ${tracked.toLocaleString()} tracked` : undefined;
   const chartData = pivotTimeseries(ts.data?.items ?? []);
 
   const refreshing = detail.isFetching || ts.isFetching;
@@ -112,22 +110,8 @@ export default function CampaignDetail() {
           </StatRow>
           <ReleaseNote campaign={detail.data.campaign} />
           <StatRow title="Analytics">
-            {tracking !== 'off' && (
-              <StatGroup>
-                <Stat label="Opens" tip="From open tracking" value={evt.open ?? 0} sub={openClickSub} />
-                <Stat label="Clicks" tip="From click tracking" value={evt.click ?? 0} sub={openClickSub} />
-              </StatGroup>
-            )}
-            {/* Downloads are counted only in link mode, where attachments are
-                delivered as download links instead of inside each email. */}
-            <StatGroup>
-              <Stat label="Unsubs" value={evt.unsubscribe ?? 0} />
-              {linkMode && <Stat label="Downloads" tip="Times subscribers downloaded the attachments from their links" value={evt.download ?? 0} />}
-            </StatGroup>
+            <AnalyticsStrip campaign={detail.data.campaign} evt={evt} tracking={tracking} linkMode={linkMode} />
           </StatRow>
-          {tracking === 'off' && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 -mt-3">Open and click tracking was off for this campaign.</p>
-          )}
         </>
       )}
 
@@ -210,6 +194,52 @@ function trackingState(campaign: Detail['campaign'] | undefined): TrackingState 
   if (recorded === 0) return 'unknown';
   if (tracked === 0) return 'off';
   return tracked < recorded ? 'partial' : 'on';
+}
+
+// One full-width strip: tracking (on/off, for how many subscribers), unique
+// opens and clicks with their rate among tracked emails, unsubscribes with
+// their rate among sent emails, and downloads in link mode. Opens and clicks
+// are left out when no email was tracked.
+function AnalyticsStrip({ campaign, evt, tracking, linkMode }: {
+  campaign: Detail['campaign']; evt: Record<string, number>; tracking: TrackingState; linkMode: boolean;
+}) {
+  const tracked = campaign.tracked_count ?? 0;
+  const recorded = campaign.tracking_recorded_count ?? 0;
+  const sent = campaign.sent_count ?? 0;
+  // A small non-zero share shows as "<1%" rather than a misleading "0%".
+  const pct = (n: number, of: number) => (n > 0 && (100 * n) / of < 1 ? '<1%' : `${Math.round((100 * n) / of)}%`);
+  const n = (v: number) => v.toLocaleString();
+  const trackingValue = tracking === 'unknown'
+    ? <span className="text-base font-medium text-slate-500 dark:text-slate-400">Not recorded</span>
+    : <span className={`inline-flex items-center rounded px-2.5 py-1 text-sm font-medium ${tracking === 'off'
+      ? 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>{tracking === 'off' ? 'Off' : 'On'}</span>;
+  const trackingSub = tracking === 'unknown'
+    ? 'sent before tracking was recorded'
+    : tracking === 'off' ? `for none of ${n(recorded)} subscribers` : `for ${n(tracked)} of ${n(recorded)} subscribers`;
+  const engagement = (unique: number, total: number) =>
+    tracked > 0 ? `${pct(unique, tracked)} of tracked · ${n(total)} total` : `${n(total)} total`;
+  return (
+    <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-flow-col lg:auto-cols-fr rounded-lg shadow-sm border bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800">
+      <Segment label="Tracking" tip="Open and click tracking: the global switch, the newsletter's setting and each subscriber's consent" value={trackingValue} sub={trackingSub} />
+      {tracking !== 'off' && <Segment label="Opens" tip="Subscribers who opened the email (unique)" value={n(campaign.unique_opens ?? 0)} sub={engagement(campaign.unique_opens ?? 0, evt.open ?? 0)} />}
+      {tracking !== 'off' && <Segment label="Clicks" tip="Subscribers who clicked a link (unique)" value={n(campaign.unique_clicks ?? 0)} sub={engagement(campaign.unique_clicks ?? 0, evt.click ?? 0)} />}
+      <Segment label="Unsubs" tip="Subscribers who unsubscribed from this campaign" value={n(evt.unsubscribe ?? 0)} sub={sent > 0 ? `${pct(evt.unsubscribe ?? 0, sent)} of sent` : undefined} />
+      {/* Downloads are counted only in link mode, where attachments are
+          delivered as download links instead of inside each email. */}
+      {linkMode && <Segment label="Downloads" tip="Times subscribers downloaded the attachments from their links" value={n(evt.download ?? 0)} sub="attachment downloads" />}
+    </div>
+  );
+}
+
+function Segment({ label, value, sub, tip }: { label: string; value: ReactNode; sub?: string; tip?: string }) {
+  return (
+    <div className="p-4 lg:border-l lg:first:border-l-0 border-slate-200 dark:border-slate-800" title={tip}>
+      <div className="text-xs uppercase tracking-wide whitespace-nowrap text-slate-500 dark:text-slate-400">{label}</div>
+      <div className="text-2xl font-semibold mt-1 whitespace-nowrap text-slate-900 dark:text-slate-100">{value}</div>
+      {sub && <div className="text-xs text-slate-400 mt-0.5 dark:text-slate-500">{sub}</div>}
+    </div>
+  );
 }
 
 function StatRow({ title, children }: { title: string; children: ReactNode }) {

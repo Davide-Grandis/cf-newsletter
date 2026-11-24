@@ -127,6 +127,9 @@ export interface Campaign {
   // emails with a recorded tracking state (0 for campaigns sent before 2.6.5).
   tracked_count?: number;
   tracking_recorded_count?: number;
+  // Campaign detail only: unique subscribers who opened / clicked.
+  unique_opens?: number;
+  unique_clicks?: number;
 }
 
 export interface CampaignDetail {

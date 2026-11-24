@@ -2021,7 +2021,10 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
             // Open/click tracking per sent email: how many were tracked, and how
             // many have a recorded tracking state (sends before 2.6.5 have none).
             "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND s.tracked = 1) AS tracked_count, " +
-            "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND s.tracked IS NOT NULL) AS tracking_recorded_count " +
+            "(SELECT COUNT(*) FROM sends s WHERE s.campaign_id = c.id AND s.tracked IS NOT NULL) AS tracking_recorded_count, " +
+            // Unique subscribers who opened / clicked (events count every repeat).
+            "(SELECT COUNT(DISTINCT e.subscriber_id) FROM events e WHERE e.campaign_id = c.id AND e.type = 'open') AS unique_opens, " +
+            "(SELECT COUNT(DISTINCT e.subscriber_id) FROM events e WHERE e.campaign_id = c.id AND e.type = 'click') AS unique_clicks " +
             'FROM campaigns c LEFT JOIN newsletters n ON n.id = c.newsletter_id WHERE c.id = ?',
         )
         .bind(id)
