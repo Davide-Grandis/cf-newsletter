@@ -69,11 +69,13 @@ export default function Dashboard() {
           Refresh
         </button>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-2 gap-4 ${isSuper ? 'md:grid-cols-4' : 'md:grid-cols-5'}`}>
         <Card label="Newsletters" value={nls.length} sub={`${enabledCount} enabled`} />
         <Card label="Total campaigns" value={data.campaigns?.total ?? 0} sub={`${data.campaigns?.sent ?? 0} sent`} />
         <Card label="Active subscribers" value={subTotals.active ?? 0} sub={`${totalSubs.toLocaleString()} total`} />
         <Card label="Unsubscribed / bounced" value={(subTotals.unsubscribed ?? 0) + (subTotals.bounced ?? 0)} sub={`${subTotals.bounced ?? 0} bounced`} />
+        {/* Super admins see the account-wide Backlog under Status / warm-up. */}
+        {!isSuper && <Card label="Scheduled to send" value={data.campaigns?.scheduled ?? 0} sub="in your newsletters" />}
       </div>
 
       <h2 className="text-base font-medium">Events in the last 7 days</h2>

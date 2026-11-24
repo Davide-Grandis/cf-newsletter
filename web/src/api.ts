@@ -189,7 +189,7 @@ export interface LogRow {
 
 export interface Overview {
   subscribers: Array<{ status: string; n: number }>;
-  campaigns: { total: number; sent: number; sending: number } | null;
+  campaigns: { total: number; sent: number; sending: number; scheduled: number } | null;
   events_last_7d: Array<{ type: string; n: number }>;
   newsletters: Array<{
     id: string;

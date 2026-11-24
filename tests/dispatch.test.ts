@@ -342,3 +342,27 @@ test('the links endpoint lists clicked URLs with clicks and unique clickers, mos
   }), { DB: f.db } as AdminEnv, {} as ExecutionContext)).json() as { items: Array<{ url: string }>; total: number; nextCursor: number | null };
   assert.deepEqual({ urls: page2.items.map((l) => l.url), total: page2.total, next: page2.nextCursor }, { urls: ['https://example.com/b'], total: 2, next: null }, 'Pages through the links in order');
 });
+
+test('a newsletter admin sees only their newsletters\' emails scheduled to send', async () => {
+  const f = fixture({ dailyCap: 2 });
+  f.sqlite.exec(`
+    INSERT INTO newsletters (id, name, inbound_address) VALUES ('other', 'Other', 'other@example.com');
+    INSERT INTO campaigns (id, newsletter_id, subject, sent_by, status, total_recipients, sent_count, failed_count, created_at) VALUES
+      ('c2', 'other', 'Other', 'a@example.com', 'sending', 10, 1, 0, '2026-01-02 00:00:00'),
+      ('c3', 'nl', 'Old', 'a@example.com', 'done', 4, 4, 0, '2026-01-03 00:00:00');
+    INSERT INTO admins (email, role, capability) VALUES ('root@example.com', 'super_admin', 'edit'), ('nl-admin@example.com', 'admin', 'read_only');
+    INSERT INTO admins_newsletters (email, newsletter_id) VALUES ('nl-admin@example.com', 'nl');
+  `);
+  f.addSubscribers(5);
+  await f.ingest();
+  await f.drain(true); // 2 of c1's 5 sent today
+  const scheduled = async (email: string) => {
+    const res = await admin.fetch(new Request('https://console.example.com/api/stats/overview', {
+      headers: { 'cf-access-authenticated-user-email': email },
+    }), { DB: f.db } as AdminEnv, {} as ExecutionContext);
+    assert.equal(res.status, 200);
+    return ((await res.json()) as { campaigns: { scheduled: number } }).campaigns.scheduled;
+  };
+  assert.equal(await scheduled('nl-admin@example.com'), 3, 'Only the admin\'s newsletter: c1 has 3 left (the done campaign adds nothing)');
+  assert.equal(await scheduled('root@example.com'), 12, 'A super admin sees every newsletter: 3 + 9');
+});

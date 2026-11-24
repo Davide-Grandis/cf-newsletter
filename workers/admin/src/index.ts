@@ -2492,7 +2492,10 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
       .prepare(
         "SELECT COUNT(*) AS total, " +
           "SUM(CASE WHEN status='done' THEN 1 ELSE 0 END) AS sent, " +
-          "SUM(CASE WHEN status='sending' THEN 1 ELSE 0 END) AS sending " +
+          "SUM(CASE WHEN status='sending' THEN 1 ELSE 0 END) AS sending, " +
+          // Emails still to send in the viewer's in-progress campaigns (the
+          // account-wide equivalent is the super-admin Backlog).
+          "COALESCE(SUM(CASE WHEN status IN ('queued','sending') THEN MAX(total_recipients - sent_count - failed_count, 0) ELSE 0 END), 0) AS scheduled " +
           `FROM campaigns ${scoped ? `WHERE newsletter_id IN ${inSql}` : ''}`,
       )
       .bind(...scopeBinds)
