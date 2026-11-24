@@ -89,11 +89,15 @@ export default function Updates() {
       </div>
     </section>
 
-    {!active && release?.newer && <section className={card}>
-      <h2 className="text-base font-medium">Install release {release.version}</h2>
-      <p className="text-sm text-slate-600 dark:text-slate-300">The update preserves your data and settings.</p>
-      <p className="text-sm text-slate-600 dark:text-slate-300">Click to launch the update. Sign in to Cloudflare as an Administrator or Super Administrator of this account.</p>
-      <button className={primary} disabled={pending || Boolean(status?.checkError)} onClick={() => handoff.mutate({ releaseId: release.id, digest: release.digest })}>{handoff.isPending ? 'Opening Cloudflare...' : 'Update'}</button>
+    {!active && release?.newer && <section className={`${card} !p-0 !space-y-0 overflow-hidden`}>
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+        <h2 className="text-base font-medium">Install release {release.version}</h2>
+      </div>
+      <div className="space-y-4 p-4">
+        <p className="text-sm text-slate-600 dark:text-slate-300">The update preserves your data and settings.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">Click to launch the update. Sign in to Cloudflare as an Administrator or Super Administrator of this account.</p>
+        <button className={primary} disabled={pending || Boolean(status?.checkError)} onClick={() => handoff.mutate({ releaseId: release.id, digest: release.digest })}>{handoff.isPending ? 'Opening Cloudflare...' : 'Update'}</button>
+      </div>
     </section>}
 
     {active && <section className={card} aria-live="polite">
