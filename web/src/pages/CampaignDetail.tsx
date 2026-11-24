@@ -30,6 +30,7 @@ export default function CampaignDetail() {
   });
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [tab, setTab] = useState<'events' | 'logs'>('events');
   const deleteMutation = useMutation({
     mutationFn: () => api(`/api/campaigns/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
@@ -51,12 +52,9 @@ export default function CampaignDetail() {
         <div>
           <Link to="/campaigns" className="text-sm text-slate-500 hover:underline dark:text-slate-400">← Campaigns</Link>
           <h1 className="text-xl font-semibold mt-1">{detail.data?.campaign.subject ?? ''}</h1>
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            {detail.data?.campaign.newsletter_name && (
-              <span className="mr-2">{detail.data.campaign.newsletter_name}</span>
-            )}
-            <span className="font-mono">{id}</span>
-          </div>
+          {detail.data?.campaign.newsletter_name && (
+            <div className="text-xs text-slate-500 dark:text-slate-400">{detail.data.campaign.newsletter_name}</div>
+          )}
         </div>
         <div className="ml-auto mt-1 flex items-center gap-2">
           {isSuper && status && !ACTIVE_CAMPAIGN_STATUSES.includes(status) && (
@@ -92,44 +90,26 @@ export default function CampaignDetail() {
       />
 
       {detail.data && (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-4 dark:bg-slate-900 dark:border-slate-800">
+          <StatRow title="Delivery" className="grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
             <Stat label="Status" value={<CampaignStatus status={detail.data.campaign.status} />} />
             <Stat label="Recipients" value={detail.data.campaign.total_recipients} />
+            <Stat label="Released" tip="Handed to delivery so far, on any day" value={detail.data.campaign.released_count ?? 0} ok />
+            <Stat label="Paused" tip="Waiting for a later day's sending budget, or a retry" value={detail.data.campaign.paused_count ?? 0} />
             <Stat label="Sent" value={detail.data.campaign.sent_count} ok />
             <Stat label="Failed" value={detail.data.campaign.failed_count} bad />
+            <Stat label="Bounces" value={evt.bounce ?? 0} />
+          </StatRow>
+          <ReleaseNote campaign={detail.data.campaign} />
+          <StatRow title="Analytics" className="grid-cols-2 sm:grid-cols-5">
             <Stat label="Opens" value={evt.open ?? 0} />
             <Stat label="Clicks" value={evt.click ?? 0} />
-          </div>
-          <DeliveryProgress campaign={detail.data.campaign} />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Stat label="Bounces" value={evt.bounce ?? 0} />
             <Stat label="Unsubs" value={evt.unsubscribe ?? 0} />
             <Stat label="Downloads" value={evt.download ?? 0} />
             <Stat label="Attachments" value={detail.data.campaign.attachment_count} />
-          </div>
-        </>
-      )}
-
-      <section>
-        <h2 className="text-base font-medium mb-2">Events over time</h2>
-        <div className="h-72 bg-white border border-slate-200 rounded p-2 dark:bg-slate-900 dark:border-slate-800">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
-              <XAxis dataKey="bucket" fontSize={10} />
-              <YAxis fontSize={10} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="open" stackId="a" fill="#10b981" />
-              <Bar dataKey="click" stackId="a" fill="#3b82f6" />
-              <Bar dataKey="bounce" stackId="a" fill="#f59e0b" />
-              <Bar dataKey="unsubscribe" stackId="a" fill="#94a3b8" />
-              <Bar dataKey="download" stackId="a" fill="#8b5cf6" />
-            </BarChart>
-          </ResponsiveContainer>
+          </StatRow>
         </div>
-      </section>
+      )}
 
       {detail.data && detail.data.attachments.length > 0 && (
         <section>
@@ -145,46 +125,85 @@ export default function CampaignDetail() {
         </section>
       )}
 
-      <SendsTable campaignId={id} />
+      <section>
+        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 mb-4">
+          <TabButton active={tab === 'events'} onClick={() => setTab('events')}>Events</TabButton>
+          <TabButton active={tab === 'logs'} onClick={() => setTab('logs')}>Logs</TabButton>
+        </div>
+        {tab === 'events' ? (
+          <div className="h-72 bg-white border border-slate-200 rounded p-2 dark:bg-slate-900 dark:border-slate-800">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
+                <XAxis dataKey="bucket" fontSize={10} />
+                <YAxis fontSize={10} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="open" stackId="a" fill="#10b981" />
+                <Bar dataKey="click" stackId="a" fill="#3b82f6" />
+                <Bar dataKey="bounce" stackId="a" fill="#f59e0b" />
+                <Bar dataKey="unsubscribe" stackId="a" fill="#94a3b8" />
+                <Bar dataKey="download" stackId="a" fill="#8b5cf6" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <SendsTable campaignId={id} />
+        )}
+      </section>
     </div>
   );
 }
 
-// Recipients handed to delivery so far versus those paused for a later day's
-// sending budget (or a retry). At creation, the first is what fit in that day's
-// remaining budget; both update as each day's share is released.
-function DeliveryProgress({ campaign }: { campaign: Detail['campaign'] }) {
-  const released = campaign.released_count ?? 0;
+// While recipients are paused: when the next share is released (normally the
+// next UTC midnight), or that sending is held after an account-level error.
+function ReleaseNote({ campaign }: { campaign: Detail['campaign'] }) {
   const paused = campaign.paused_count ?? 0;
-  if (released + paused === 0) return null;
-  const sending = ACTIVE_CAMPAIGN_STATUSES.includes(campaign.status);
+  if (!ACTIVE_CAMPAIGN_STATUSES.includes(campaign.status) || paused === 0) return null;
   const next = campaign.next_release_at ? fmtDate(campaign.next_release_at) : '';
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-3">
-        <Stat label="Released for delivery" value={released} ok />
-        <Stat label="Paused for later delivery" value={paused} />
-      </div>
-      {sending && paused > 0 && (
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          {campaign.dispatch_paused
-            ? `Sending is paused after a Cloudflare sending limit or account error; it resumes automatically${next ? ` at ${next}` : ''}.`
-            : `Paused recipients are released automatically ${next ? `from ${next}` : 'in the next sending window'}, as the daily sending budget allows (or when a temporary send error is retried).`}
-        </p>
-      )}
+    <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
+      {campaign.dispatch_paused
+        ? `Sending is paused after a Cloudflare sending limit or account error; it resumes automatically${next ? ` at ${next}` : ''}.`
+        : `Paused recipients are released automatically ${next ? `from ${next}` : 'in the next sending window'}, as the daily sending budget allows (or when a temporary send error is retried).`}
+    </p>
+  );
+}
+
+function StatRow({ title, className, children }: { title: string; className: string; children: ReactNode }) {
+  return (
+    <div>
+      <h2 className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">{title}</h2>
+      <div className={`grid gap-3 ${className}`}>{children}</div>
     </div>
   );
 }
 
-function Stat({ label, value, ok, bad }: { label: string; value: ReactNode; ok?: boolean; bad?: boolean }) {
+function Stat({ label, value, ok, bad, tip }: { label: string; value: ReactNode; ok?: boolean; bad?: boolean; tip?: string }) {
   const cls = ok ? 'text-emerald-700 dark:text-emerald-400' : bad ? 'text-red-700 dark:text-red-400' : 'text-slate-900 dark:text-slate-100';
   return (
-    <div className="bg-white rounded border border-slate-200 p-3 dark:bg-slate-900 dark:border-slate-800">
+    <div className="rounded border border-slate-200 bg-slate-50/60 p-3 dark:bg-slate-800/40 dark:border-slate-700" title={tip}>
       <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`text-lg font-semibold mt-0.5 ${cls}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
     </div>
+  );
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 whitespace-nowrap px-3 py-2 text-sm -mb-px border-b-2 ${
+        active
+          ? 'border-slate-900 text-slate-900 font-medium dark:border-slate-100 dark:text-slate-100'
+          : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -213,7 +232,7 @@ function SendsTable({ campaignId }: { campaignId: string }) {
   return (
     <section>
       <div className="flex items-center gap-2 mb-2">
-        <h2 className="text-base font-medium">Sends</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Delivery log for each recipient.</p>
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(0); }}
