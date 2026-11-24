@@ -26,3 +26,16 @@ test('the recipient address is escaped in the HTML', () => {
   assert.doesNotMatch(mail.html, /<b>x<\/b>/);
   assert.match(mail.html, /&quot;&lt;b&gt;x&lt;\/b&gt;&quot;@example\.com/);
 });
+
+test('a newsletter admin\'s welcome email names their newsletters', () => {
+  const one = consoleAccessEmail({ ...base, event: 'added', role: 'admin', newsletters: ['Weekly updates'] });
+  assert.match(one.text, /for the newsletter Weekly updates\./);
+  assert.match(one.html, /for the newsletter <strong[^>]*>Weekly updates<\/strong>\./);
+  const many = consoleAccessEmail({ ...base, event: 'added', role: 'admin', newsletters: ['A & B', 'Digest', 'News'] });
+  assert.match(many.text, /for the newsletters A & B, Digest and News\./);
+  assert.match(many.html, /A &amp; B<\/strong>, <strong[^>]*>Digest<\/strong> and <strong[^>]*>News<\/strong>\./);
+  const none = consoleAccessEmail({ ...base, event: 'added', role: 'admin' });
+  assert.match(none.text, /for the newsletters you have been assigned to\./);
+  const superAdmin = consoleAccessEmail({ ...base, event: 'added', role: 'super_admin', newsletters: ['Ignored'] });
+  assert.doesNotMatch(superAdmin.html, /Ignored/);
+});

@@ -1181,7 +1181,6 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
           .bind(newEmail, 'admin', capability)
           .run();
         list_warning = await addEmailToAccessList(env, newEmail);
-        notify_warning = await notifyUser(env, newEmail, 'admin', 'added');
       }
       // Existing admins keep their current capability (use the row toggle to
       // change it); only the assignment is added here.
@@ -1189,6 +1188,9 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         .prepare('INSERT OR IGNORE INTO admins_newsletters (email, newsletter_id) VALUES (?, ?)')
         .bind(newEmail, nid)
         .run();
+      // Notify a brand-new console user once the assignment exists, so the
+      // email can name the newsletter.
+      if (!existing) notify_warning = await notifyUser(env, newEmail, 'admin', 'added');
       return Response.json({ ok: true, email: newEmail, list_warning, notify_warning }, { status: 201 });
     }
     const nlAdminMatch = /^\/admins\/(.+)$/.exec(rest);
@@ -2997,8 +2999,15 @@ async function notifyUser(
     const fromAddr = consoleSender(baseDomain);
     const consoleUrl = `https://console.${baseDomain}`;
     const logo = await emailLogo(env, consoleUrl);
+    // A new newsletter admin is told which newsletters they manage.
+    const newsletters = event === 'added' && role !== 'super_admin'
+      ? ((await env.DB
+        .prepare('SELECT n.name FROM admins_newsletters an JOIN newsletters n ON n.id = an.newsletter_id WHERE an.email = ? ORDER BY n.name')
+        .bind(email)
+        .all<{ name: string }>()).results ?? []).map((r) => r.name)
+      : [];
     const { subject, text, html } = consoleAccessEmail({
-      event, role: role === 'super_admin' ? 'super_admin' : 'admin', email, consoleUrl, logoCid: logo?.contentId,
+      event, role: role === 'super_admin' ? 'super_admin' : 'admin', email, consoleUrl, logoCid: logo?.contentId, newsletters,
     });
     const raw = buildEmail({
       from: fromAddr,

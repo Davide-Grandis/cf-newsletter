@@ -9,6 +9,8 @@ export interface AccessEmailInput {
   consoleUrl: string;
   /** Content-ID of the inline logo image, when one is attached. */
   logoCid?: string;
+  /** Newsletters a newsletter admin manages (named in the welcome email). */
+  newsletters?: string[];
 }
 
 export interface AccessEmail {
@@ -29,9 +31,16 @@ export function consoleAccessEmail(input: AccessEmailInput): AccessEmail {
   const roleLabel = isSuper ? 'Super administrator' : 'Administrator';
   const url = esc(input.consoleUrl);
   const added = input.event === 'added';
+  const names = (input.newsletters ?? []).filter((n) => n.trim());
+  const list = (wrap: (n: string) => string) =>
+    names.length <= 1 ? names.map(wrap).join('') : `${names.slice(0, -1).map(wrap).join(', ')} and ${wrap(names[names.length - 1]!)}`;
+  const scope = names.length ? `${names.length === 1 ? 'the newsletter' : 'the newsletters'} ` : 'the newsletters you have been assigned to';
   const access = isSuper
     ? 'You have full access to the console, including all newsletters, user management and settings.'
-    : 'You can manage subscribers, authors and campaigns for the newsletters you have been assigned to.';
+    : `You can manage subscribers, authors and campaigns for ${scope}${list((n) => n)}.`;
+  const accessHtml = isSuper
+    ? esc(access)
+    : `You can manage subscribers, authors and campaigns for ${scope}${list((n) => `<strong style="color:#0f172a">${esc(n)}</strong>`)}.`;
 
   const subject = added ? `You have been added to the ${APP_NAME}` : `Your access to the ${APP_NAME} has been removed`;
   const text = added
@@ -55,7 +64,7 @@ export function consoleAccessEmail(input: AccessEmailInput): AccessEmail {
     ? `<h1 style="margin:0 0 12px;font-size:20px;line-height:28px;color:#0f172a">Welcome to the ${APP_NAME}</h1>` +
       `<p style="margin:0 0 16px">You have been granted access as</p>` +
       `<p style="margin:0 0 20px">${badge}</p>` +
-      `<p style="margin:0 0 24px">${esc(access)}</p>` +
+      `<p style="margin:0 0 24px">${accessHtml}</p>` +
       `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px"><tr>` +
       `<td bgcolor="${ACCENT}" style="border-radius:6px">` +
       `<a href="${url}" style="display:inline-block;padding:9px 20px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px">Open the console</a>` +
