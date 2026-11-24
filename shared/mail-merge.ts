@@ -1,4 +1,4 @@
-import { sanitizeFooterHtml } from './footer';
+import { joinSplitPlaceholders, sanitizeFooterHtml } from './footer';
 
 export const MAIL_MERGE_HTML_MAX = 20000;
 export const MAIL_MERGE_TEXT_MAX = 5000;
@@ -37,7 +37,7 @@ export function renderMailMerge(template: string, vars: MailMergeVars | null | u
 function renderIncomingHtml(html: string, vars: MailMergeVars | null | undefined): string {
   // Replace visible text only: keep the original markup/styles and never turn
   // subscriber data into a URL, attribute, script, or stylesheet.
-  return html.replace(
+  return joinSplitPlaceholders(html, ['first_name', 'last_name', 'full_name']).replace(
     /<!--[\s\S]*?(?:-->|$)|<(head|script|style|title)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1\s*>|<(?:[^>"']|"[^"]*"|'[^']*')*>|([^<]+)/gi,
     (part, _element: string | undefined, text: string | undefined) =>
       text === undefined ? part : renderMailMerge(text, vars, true),

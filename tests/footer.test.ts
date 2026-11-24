@@ -59,3 +59,9 @@ test('incoming text footer substitutes raw values', () => {
   assert.equal(renderIncomingFooterText('{{newsletter_name}} / {{email}} / leave: http://{{unsubscribe_url}}', vars),
     `News & Co / jane@example.com / leave: ${vars.unsubscribe_url}`);
 });
+
+test('placeholders split by formatting tags (pasted with styling) are still resolved', () => {
+  const html = '<div>Leave: {{<span style="color:red">unsubscribe_url</span>}} / {{ <b>email</b> }} / {{<i>newsletter_name</i>}}</div>';
+  assert.equal(renderIncomingFooterHtml(prepareIncomingFooterHtml(html), vars),
+    `<div>Leave: <span style="color:red"><a href="${url}">${url}</a></span> / <b>jane@example.com</b> / <i>News &amp; Co</i></div>`);
+});

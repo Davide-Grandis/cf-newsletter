@@ -150,3 +150,9 @@ test('prepend mode does not substitute the incoming body and remains available a
     text: 'Hello Jane,\n\n' + text,
   });
 });
+
+test('incoming placeholders split by formatting tags (pasted with styling) are still resolved', () => {
+  const html = '<p>Hi {{<span style="color:red">first_name</span>}} {{ <b>last_name</b> }}, {{<i>full_name</i>}}</p>';
+  assert.equal(applyMailMerge({ ...settings, mail_merge_incoming: 1 }, { first_name: 'Jane', last_name: 'Doe' }, html, '').html,
+    '<p>Hi <span style="color:red">Jane</span> <b>Doe</b>, <i>Jane Doe</i></p>');
+});

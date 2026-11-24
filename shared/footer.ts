@@ -85,6 +85,21 @@ const INCOMING_TEXT_RE = new RegExp(String.raw`(${UNSUB_FORMS})|\{\{\s*(newslett
 const HTML_PARTS_RE =
   /<!--[\s\S]*?(?:-->|$)|<(head|script|style|title)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1\s*>|<(?:[^>"']|"[^"]*"|'[^']*')*>|([^<]+)/gi;
 
+// A placeholder whose braces are split from its name by markup, as when a
+// token is pasted with formatting: `{{<span style="…">unsubscribe_url</span>}}`.
+const TAG = String.raw`<(?:[^>"']|"[^"]*"|'[^']*')*>`;
+const GAP = String.raw`(?:\s|&nbsp;|${TAG})*?`;
+const EDGE_SPACE_RE = /^(?:\s|&nbsp;)+|(?:\s|&nbsp;)+$/g;
+
+/** Move split placeholders' braces inside the markup, keeping its formatting. */
+export function joinSplitPlaceholders(html: string, names: readonly string[]): string {
+  const re = new RegExp(String.raw`\{\{(${GAP})\s*(${names.join('|')})\s*(${GAP})\}\}`, 'gi');
+  return html.replace(re, (_m, pre: string, key: string, post: string) =>
+    `${pre.replace(EDGE_SPACE_RE, '')}{{${key.toLowerCase()}}}${post.replace(EDGE_SPACE_RE, '')}`);
+}
+
+const FOOTER_VARS = ['unsubscribe_url', 'newsletter_name', 'email'] as const;
+
 /** Whether an email body or footer template contains the unsubscribe placeholder. */
 export function hasUnsubscribePlaceholder(content: string | null | undefined): boolean {
   return !!content && UNSUB_ANY_RE.test(content);
@@ -97,7 +112,7 @@ export function hasUnsubscribePlaceholder(content: string | null | undefined): b
  * afterwards) is never redirected through the tracker.
  */
 export function prepareIncomingFooterHtml(html: string): string {
-  return html.replace(UNSUB_HREF_RE, 'href="{{unsubscribe_url}}"');
+  return joinSplitPlaceholders(html, FOOTER_VARS).replace(UNSUB_HREF_RE, 'href="{{unsubscribe_url}}"');
 }
 
 /**
@@ -111,7 +126,7 @@ export function renderIncomingFooterHtml(html: string, vars: FooterVars): string
   const url = escapeAttrUrl(vars.unsubscribe_url);
   let found = false;
   let inLink = false;
-  const out = html.replace(HTML_PARTS_RE, (part, element: string | undefined, text: string | undefined) => {
+  const out = joinSplitPlaceholders(html, FOOTER_VARS).replace(HTML_PARTS_RE, (part, element: string | undefined, text: string | undefined) => {
     if (text === undefined) {
       if (element || part.startsWith('<!--')) return part;
       if (/^<a\b/i.test(part)) inLink = true;
