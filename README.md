@@ -64,20 +64,13 @@ records a single-use update request and continues on the
 [hosted installer](https://installer.cf-newsletter.com/), where you sign in to
 Cloudflare as an Administrator or Super Administrator of this account. The
 installer checks compatibility, asks for final confirmation and starts the update;
-progress remains visible in the console. No API token is entered or
-stored. A failed update is resumed the same way with **Resume with Cloudflare**.
+progress remains visible in the console. A failed update is resumed the same way with **Resume with Cloudflare**.
 
 The temporary OAuth credential is encrypted in the target account for the job,
-expires no later than one hour, and is removed on completion or failure. It never
-appears in Workflow parameters, logs or update history.
+expires no later than one hour, and is removed on completion or failure.
 
 The hosted installer/updater can also be opened directly, including when the
-console is unavailable. Existing installations need one hosted bootstrap update
-to create the updater. Releases that use console OAuth updates require updater
-engine 1.1.0, so consoles running older releases update once through the hosted
-installer. That update
-removes any previously saved update token from the updater Worker. Revoke such
-tokens in the Cloudflare dashboard.
+console is unavailable. 
 
 Back up D1 or verify a recovery point before updating. Routine updates preserve
 bindings, resource IDs/locality, secrets, settings, routes, schedules and Queues.
