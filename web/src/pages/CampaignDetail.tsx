@@ -91,14 +91,20 @@ export default function CampaignDetail() {
 
       {detail.data && (
         <>
-          <StatRow title="Delivery" className="grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
-            <Stat label="Status" highlight value={<CampaignStatus status={detail.data.campaign.status} />} />
-            <Stat label="Subscribers" value={detail.data.campaign.total_recipients} />
-            <Stat label="Dispatched" tip="Handed off for sending so far, on any day" value={detail.data.campaign.released_count ?? 0} ok />
-            <Stat label="Paused" tip="Waiting for a later day's sending budget, or a retry" value={detail.data.campaign.paused_count ?? 0} />
-            <Stat label="Sent" value={detail.data.campaign.sent_count} ok />
-            <Stat label="Failed" value={detail.data.campaign.failed_count} bad />
-            <Stat label="Bounces" value={evt.bounce ?? 0} />
+          <StatRow title="Delivery" className="grid-cols-1 lg:grid-cols-[1fr_3fr_3fr]">
+            <div className="p-2">
+              <Stat label="Status" highlight value={<CampaignStatus status={detail.data.campaign.status} />} />
+            </div>
+            <StatGroup>
+              <Stat label="Subscribers" value={detail.data.campaign.total_recipients} />
+              <Stat label="Dispatched" tip="Handed off for sending so far, on any day" value={detail.data.campaign.released_count ?? 0} ok />
+              <Stat label="Paused" tip="Waiting for a later day's sending budget, or a retry" value={detail.data.campaign.paused_count ?? 0} />
+            </StatGroup>
+            <StatGroup>
+              <Stat label="Sent" value={detail.data.campaign.sent_count} ok />
+              <Stat label="Failed" value={detail.data.campaign.failed_count} bad />
+              <Stat label="Bounces" value={evt.bounce ?? 0} />
+            </StatGroup>
           </StatRow>
           <ReleaseNote campaign={detail.data.campaign} />
           <StatRow title="Analytics" className="grid-cols-2 sm:grid-cols-5">
@@ -173,9 +179,19 @@ function ReleaseNote({ campaign }: { campaign: Detail['campaign'] }) {
 function StatRow({ title, className, children }: { title: string; className: string; children: ReactNode }) {
   return (
     <div>
-      <h2 className="text-base font-medium mb-3">{title}</h2>
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-base font-medium">{title}</h2>
+        <div className="flex-1 border-t border-slate-200 dark:border-slate-800" />
+      </div>
       <div className={`grid gap-4 ${className}`}>{children}</div>
     </div>
+  );
+}
+
+// A light background that groups related cards within a row.
+function StatGroup({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-3 gap-3 rounded-xl bg-slate-100/70 p-2 dark:bg-slate-800/30">{children}</div>
   );
 }
 
