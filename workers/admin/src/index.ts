@@ -25,6 +25,7 @@ import {
 } from '../../../shared/warmup';
 import { buildEmail, sanitizeDisplayName, type AttachmentPart } from '../../../shared/mime';
 import { consoleAccessEmail } from './access-email';
+import { verifiedAccessRequest } from './access-jwt';
 import { sanitizeFooterHtml } from '../../../shared/footer';
 import { sanitizeMailMergeHtml, MAIL_MERGE_HTML_MAX, MAIL_MERGE_TEXT_MAX } from '../../../shared/mail-merge';
 import {
@@ -115,9 +116,16 @@ export default {
       return Response.json({ ok: true });
     }
 
+    // Console API requests must carry Cloudflare Access's identity: the header
+    // Access injects at the edge, backed by a valid Access token for this
+    // console's application (see access-jwt.ts). Without it the request did
+    // not transit Access, so no API data is served.
+    if (url.pathname.startsWith('/api/') && !await verifiedAccessRequest(req, env.DB)) {
+      return Response.json({ error: 'unauthorized' }, { status: 401 });
+    }
+
     // Identity probe: reflects the Cloudflare Access headers the edge injects
-    // when the worker is published behind an Access application. No bearer
-    // token required — Access already authenticated the request.
+    // when the worker is published behind an Access application.
     if (req.method === 'GET' && url.pathname === '/api/me') {
       const rawEmail = req.headers.get('cf-access-authenticated-user-email');
       const name = req.headers.get('cf-access-authenticated-user-name');
@@ -205,12 +213,6 @@ export default {
     }
 
     if (url.pathname.startsWith('/api/')) {
-      // Cloudflare Access injects this header at the edge after authenticating
-      // the user. If it is missing the request did not transit Access, so we
-      // refuse to serve API data.
-      if (!req.headers.get('cf-access-authenticated-user-email')) {
-        return Response.json({ error: 'unauthorized' }, { status: 401 });
-      }
       return await handleApi(req, env, url);
     }
 

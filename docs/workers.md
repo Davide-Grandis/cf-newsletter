@@ -464,16 +464,24 @@ campaigns and warmup quota.
 
 ### Authentication
 
-The worker has **no built-in auth**. It must be deployed behind a
-Cloudflare Access application; Access authenticates the user at the edge
-and adds the `Cf-Access-Authenticated-User-Email` header on every
-request that reaches the worker. The handler simply checks that the
-header is present:
+The worker must be deployed behind a Cloudflare Access application. Access
+authenticates the user at the edge and adds two headers to every request that
+reaches the worker: `Cf-Access-Authenticated-User-Email` and the signed Access
+token `Cf-Access-Jwt-Assertion`. Every `/api/*` request (except `/api/health`)
+is checked by `verifiedAccessRequest()` in `workers/admin/src/access-jwt.ts`:
 
-```ts
-if (!req.headers.get('cf-access-authenticated-user-email'))
-  return Response.json({ error: 'unauthorized' }, { status: 401 });
-```
+- The token must be an RS256 token signed by the account's Access team (keys
+  from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`, cached and
+  refreshed when Access rotates them). Its audience must be the console's Access
+  application, its issuer the team, and it must be within its validity window.
+- The token's email must match the identity header.
+
+The team domain and the application's audience tag are read from settings
+(`ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`). The hosted installer records them on fresh
+installs and when it is opened directly for an update; console-started updates
+use narrower permissions without Access. Until they are recorded (older
+installations), the identity header alone is accepted, as before. A request that
+fails the check gets `401 unauthorized`.
 
 `/api/me` reflects the Access identity back to the SPA so the header can
 display the signed-in user's name.
