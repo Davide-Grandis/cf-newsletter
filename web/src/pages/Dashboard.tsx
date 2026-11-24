@@ -204,7 +204,7 @@ export default function Dashboard() {
                   <th className="text-left p-2">Subject</th>
                   <th className="text-left p-2">Newsletter</th>
                   <th className="text-left p-2">Status</th>
-                  <th className="text-right p-2">Recipients</th>
+                  <th className="text-right p-2">Subscribers</th>
                   <th className="text-right p-2">Sent</th>
                 </tr>
               </thead>

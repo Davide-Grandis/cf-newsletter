@@ -41,7 +41,7 @@ export default function Campaigns() {
                 <Th align="left" label="Subject" hint="(click for details)" tip="Campaign email subject line" />
                 <Th align="left" label="Newsletter" tip="Newsletter this campaign belongs to" />
                 <Th align="left" label="Status" tip="Current lifecycle state of the campaign" />
-                <Th align="right" label="Recipients" tip="Total number of subscribers this campaign was sent to" className="px-4" />
+                <Th align="right" label="Subscribers" tip="Number of subscribers this campaign is sent to" className="px-4" />
                 <Th align="right" label="Sent" tip="Emails successfully accepted for delivery" className="px-4" />
                 <Th align="right" label="Failed" tip="Emails that failed to send" className="px-4" />
                 <Th align="right" label="Bounces" tip="Delivery failures reported by the receiving mail server (detected asynchronously)" className="px-4" />

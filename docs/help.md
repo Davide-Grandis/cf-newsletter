@@ -10,12 +10,12 @@ address; the pipeline validates, archives and fans it out to subscribers.
 - **Dashboard** — subscriber/campaign/event overview.
 - **Newsletters** — create newsletters and manage each one's subscribers and authors.
 - **Campaigns** — every issue that has been ingested, with delivery stats. A
-  campaign's page shows **Released for delivery** (recipients handed to
-  delivery so far, on any day) and **Paused for later delivery** (recipients
-  waiting for a later day's sending budget, set by warmup and the Cloudflare
-  quota, or for a retry after a temporary error), with when the next share is
-  released. Both update as each day's share is sent; the **Pending** filter
-  lists the paused recipients. A campaign that hasn't finished shows as
+  campaign's page shows **Dispatched** (subscribers handed off for sending so
+  far, on any day) and **Paused** (subscribers waiting for a later day's
+  sending budget, set by warmup and the Cloudflare quota, or for a retry after a
+  temporary error), with when the next share is dispatched. Both update as each
+  day's share is sent; the **Pending** filter in the **Logs** tab lists the
+  paused subscribers. A campaign that hasn't finished shows as
   **sending** only while a batch is out for delivery, **scheduled** while the
   rest waits for a later day's budget (or a retry), and **paused** while
   sending is held after a Cloudflare sending limit or account error.

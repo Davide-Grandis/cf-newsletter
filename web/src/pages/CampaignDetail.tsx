@@ -53,7 +53,7 @@ export default function CampaignDetail() {
           <Link to="/campaigns" className="text-sm text-slate-500 hover:underline dark:text-slate-400">← Campaigns</Link>
           <h1 className="text-xl font-semibold mt-1">{detail.data?.campaign.subject ?? ''}</h1>
           {detail.data?.campaign.newsletter_name && (
-            <div className="text-xs text-slate-500 dark:text-slate-400">{detail.data.campaign.newsletter_name}</div>
+            <div className="mt-2 text-base text-slate-600 dark:text-slate-300">{detail.data.campaign.newsletter_name}</div>
           )}
         </div>
         <div className="ml-auto mt-1 flex items-center gap-2">
@@ -90,11 +90,11 @@ export default function CampaignDetail() {
       />
 
       {detail.data && (
-        <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-4 dark:bg-slate-900 dark:border-slate-800">
+        <>
           <StatRow title="Delivery" className="grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
-            <Stat label="Status" value={<CampaignStatus status={detail.data.campaign.status} />} />
-            <Stat label="Recipients" value={detail.data.campaign.total_recipients} />
-            <Stat label="Released" tip="Handed to delivery so far, on any day" value={detail.data.campaign.released_count ?? 0} ok />
+            <Stat label="Status" highlight value={<CampaignStatus status={detail.data.campaign.status} />} />
+            <Stat label="Subscribers" value={detail.data.campaign.total_recipients} />
+            <Stat label="Dispatched" tip="Handed off for sending so far, on any day" value={detail.data.campaign.released_count ?? 0} ok />
             <Stat label="Paused" tip="Waiting for a later day's sending budget, or a retry" value={detail.data.campaign.paused_count ?? 0} />
             <Stat label="Sent" value={detail.data.campaign.sent_count} ok />
             <Stat label="Failed" value={detail.data.campaign.failed_count} bad />
@@ -108,7 +108,7 @@ export default function CampaignDetail() {
             <Stat label="Downloads" value={evt.download ?? 0} />
             <Stat label="Attachments" value={detail.data.campaign.attachment_count} />
           </StatRow>
-        </div>
+        </>
       )}
 
       {detail.data && detail.data.attachments.length > 0 && (
@@ -155,17 +155,17 @@ export default function CampaignDetail() {
   );
 }
 
-// While recipients are paused: when the next share is released (normally the
+// While subscribers are paused: when the next share is dispatched (normally the
 // next UTC midnight), or that sending is held after an account-level error.
 function ReleaseNote({ campaign }: { campaign: Detail['campaign'] }) {
   const paused = campaign.paused_count ?? 0;
   if (!ACTIVE_CAMPAIGN_STATUSES.includes(campaign.status) || paused === 0) return null;
   const next = campaign.next_release_at ? fmtDate(campaign.next_release_at) : '';
   return (
-    <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
+    <p className="text-xs text-slate-500 dark:text-slate-400 -mt-3">
       {campaign.dispatch_paused
         ? `Sending is paused after a Cloudflare sending limit or account error; it resumes automatically${next ? ` at ${next}` : ''}.`
-        : `Paused recipients are released automatically ${next ? `from ${next}` : 'in the next sending window'}, as the daily sending budget allows (or when a temporary send error is retried).`}
+        : `Paused subscribers are dispatched automatically ${next ? `from ${next}` : 'in the next sending window'}, as the daily sending budget allows (or when a temporary send error is retried).`}
     </p>
   );
 }
@@ -173,18 +173,22 @@ function ReleaseNote({ campaign }: { campaign: Detail['campaign'] }) {
 function StatRow({ title, className, children }: { title: string; className: string; children: ReactNode }) {
   return (
     <div>
-      <h2 className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">{title}</h2>
-      <div className={`grid gap-3 ${className}`}>{children}</div>
+      <h2 className="text-base font-medium mb-3">{title}</h2>
+      <div className={`grid gap-4 ${className}`}>{children}</div>
     </div>
   );
 }
 
-function Stat({ label, value, ok, bad, tip }: { label: string; value: ReactNode; ok?: boolean; bad?: boolean; tip?: string }) {
+function Stat({ label, value, ok, bad, tip, highlight }: { label: string; value: ReactNode; ok?: boolean; bad?: boolean; tip?: string; highlight?: boolean }) {
   const cls = ok ? 'text-emerald-700 dark:text-emerald-400' : bad ? 'text-red-700 dark:text-red-400' : 'text-slate-900 dark:text-slate-100';
+  // Same card style as the dashboard; the highlighted card gets an accent frame.
+  const frame = highlight
+    ? 'border-orange-300 bg-orange-50 ring-1 ring-orange-200 dark:border-orange-700 dark:bg-orange-950/30 dark:ring-orange-900'
+    : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800';
   return (
-    <div className="rounded border border-slate-200 bg-slate-50/60 p-3 dark:bg-slate-800/40 dark:border-slate-700" title={tip}>
-      <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`text-lg font-semibold mt-0.5 ${cls}`}>
+    <div className={`rounded-lg shadow-sm border p-4 ${frame}`} title={tip}>
+      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
+      <div className={`text-2xl font-semibold mt-1 ${cls}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
     </div>
@@ -232,7 +236,7 @@ function SendsTable({ campaignId }: { campaignId: string }) {
   return (
     <section>
       <div className="flex items-center gap-2 mb-2">
-        <p className="text-sm text-slate-500 dark:text-slate-400">Delivery log for each recipient.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Delivery log for each subscriber.</p>
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(0); }}
