@@ -40,7 +40,7 @@ export function UpdateNotice() {
   return <div className="relative flex items-center justify-center border-b border-amber-200 bg-amber-50 px-10 py-2 text-center text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
     {!job && (
       <button type="button" onClick={dismiss} aria-label="Dismiss" title="Dismiss"
-        className="absolute left-4 text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-200">✕</button>
+        className="absolute right-4 text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-200">✕</button>
     )}
     <span>
       {job ? 'An application update is active or needs attention.' : `cf-newsletter ${version} is available.`}{' '}
