@@ -91,9 +91,9 @@ export default function Updates() {
 
     {!active && release?.newer && <section className={card}>
       <h2 className="text-base font-medium">Install release {release.version}</h2>
-      <p className="text-sm text-slate-600 dark:text-slate-300">Updates preserve your data, settings, resource locations and signing keys. Database changes cannot be undone by rolling back Worker code.</p>
-      <p className="text-sm text-slate-600 dark:text-slate-300">You will continue on the hosted installer and sign in to Cloudflare as an Administrator or Super Administrator of this account. It checks compatibility, asks for your final confirmation and starts the update. No API token is entered or stored.</p>
-      <button className={primary} disabled={pending || Boolean(status?.checkError)} onClick={() => handoff.mutate({ releaseId: release.id, digest: release.digest })}>{handoff.isPending ? 'Opening Cloudflare...' : 'Update with Cloudflare'}</button>
+      <p className="text-sm text-slate-600 dark:text-slate-300">The update preserves your data and settings.</p>
+      <p className="text-sm text-slate-600 dark:text-slate-300">Click to launch the update. Sign in to Cloudflare as an Administrator or Super Administrator of this account.</p>
+      <button className={primary} disabled={pending || Boolean(status?.checkError)} onClick={() => handoff.mutate({ releaseId: release.id, digest: release.digest })}>{handoff.isPending ? 'Opening Cloudflare...' : 'Update'}</button>
     </section>}
 
     {active && <section className={card} aria-live="polite">

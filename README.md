@@ -79,12 +79,12 @@ the selected domain if necessary, and wait for DNS/DKIM to become active.
 ### Updates
 
 Open **Settings -> Updates** in the console to check releases and review
-changes. Updates are never installed automatically. **Update with Cloudflare**
+changes. Updates are never installed automatically. **Update**
 records a single-use update request and continues on the
 [hosted installer](https://installer.cf-newsletter.com/), where you sign in to
 Cloudflare as an Administrator or Super Administrator of this account. The
 installer checks compatibility, asks for final confirmation and starts the update;
-progress and history remain visible in the console. No API token is entered or
+progress remains visible in the console. No API token is entered or
 stored. A failed update is resumed the same way with **Resume with Cloudflare**.
 
 The temporary OAuth credential is encrypted in the target account for the job,
