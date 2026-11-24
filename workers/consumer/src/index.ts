@@ -25,6 +25,7 @@ import {
   isLegacyMessage,
   isSendMessage,
   pauseDispatch,
+  pausedUntil,
   refreshDeliveryStates,
   releaseBatch,
   retrySendLater,
@@ -238,6 +239,13 @@ async function campaignEntry(env: Env, cache: Map<string, CampaignEntry>, campai
 async function sendBatch(env: Env, cache: Map<string, CampaignEntry>, campaignId: string, batchId: string): Promise<void> {
   const rows = await claimedSends(env.DB, campaignId, batchId);
   if (!rows.length) return; // Already processed, or released and re-dispatched.
+  // Another batch hit an account-level limit after this one was dispatched:
+  // return it to the backlog without attempting sends that would fail too.
+  if (await pausedUntil(env.DB)) {
+    await releaseBatch(env.DB, batchId);
+    await refreshDeliveryStates(env.DB);
+    return;
+  }
   const entry = await campaignEntry(env, cache, campaignId);
   if (!entry) return; // Campaign deleted; its sends went with it.
   const { campaign, parts, allAtts } = entry;

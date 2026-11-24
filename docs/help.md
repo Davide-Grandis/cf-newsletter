@@ -293,11 +293,11 @@ shows a red warning as you edit a footer that lacks it.
 
 The platform (Cloudflare Email Sending) accepts outgoing messages asynchronously — `env.SEND_EMAIL.send()` resolves successfully even for invalid addresses, because the actual delivery attempt happens after the Worker returns. There is no synchronous delivery status.
 
-Bounce detection runs in the bounce worker (cron every 10 minutes) using Cloudflare's **GraphQL Analytics API** (`emailSendingAdaptive` dataset). Each sync fetches all `deliveryFailed` events from the past 25 hours and matches them against the `sends` table by recipient email address. The query is **zone-wide** — one sync covers every campaign at once — so the worker uses a single global counter rather than tracking each campaign separately.
+Bounce detection runs in the bounce worker (cron every 30 minutes) using Cloudflare's **GraphQL Analytics API** (`emailSendingAdaptive` dataset). Each sync fetches all `deliveryFailed` events from the past 25 hours and matches them against the `sends` table by recipient email address. The query is **zone-wide** — one sync covers every campaign at once — so the worker uses a single global counter rather than tracking each campaign separately.
 
 Syncs are triggered two ways:
 
-1. **Post-send burst** — whenever a campaign sends, the global counter (`checks_to_go`) is reset to **18** (capped, never higher). Each 10-minute tick where the counter is positive runs one sync and decrements it — i.e. **18 checks over ~3 hours** of coverage. This catches the bulk of bounces (which surface within minutes to a couple of hours) without waiting for the next day. A still-sending campaign keeps the counter topped up, so the 3-hour countdown only begins once sending activity stops.
+1. **Post-send burst** — whenever a campaign sends, the global counter (`checks_to_go`) is reset to **6** (capped, never higher). Each 30-minute tick where the counter is positive runs one sync and decrements it — i.e. **6 checks over ~3 hours** of coverage. This catches the bulk of bounces (which surface within minutes to a couple of hours) without waiting for the next day. A still-sending campaign keeps the counter topped up, so the 3-hour countdown only begins once sending activity stops.
 2. **Daily safety net** — a full sync runs once per day (~04:00 UTC) regardless of the counter, catching slow or delayed bounces that arrive after the burst window (some receiving servers retry for up to 24 h before giving up).
 
 Together these give close to complete bounce coverage.

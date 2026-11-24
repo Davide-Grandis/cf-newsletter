@@ -9,7 +9,7 @@ import {
   type AttachmentLimits,
 } from '../../../shared/attachments';
 import { estimateRawSize } from '../../../shared/mime';
-import { markCampaignCompleteIfDone, writeLog } from '../../../shared/db';
+import { writeLog } from '../../../shared/db';
 import { createPendingSends, requestDispatch } from '../../../shared/dispatch';
 import { loadSettings } from '../../../shared/settings';
 import { verifyAuthorAuthentication } from '../../../shared/sender-auth';
@@ -258,7 +258,6 @@ export default {
       )
       .bind(total, total, total, campaignId)
       .run();
-    if (total > 0) await markCampaignCompleteIfDone(env.DB, campaignId);
     await writeLog(env.DB, {
       source: 'ingest',
       event: 'ingest.queued',

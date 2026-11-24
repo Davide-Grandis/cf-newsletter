@@ -132,6 +132,12 @@ export async function tickReceived(db: D1Database, at: number | undefined): Prom
   await db.prepare('UPDATE dispatch_state SET next_tick_at = NULL WHERE id = 1 AND next_tick_at = ?').bind(at).run();
 }
 
+/** When sending is paused after an account-level error (ms), or null. */
+export async function pausedUntil(db: D1Database, now = Date.now()): Promise<number | null> {
+  const row = await db.prepare('SELECT paused_until FROM dispatch_state WHERE id = 1').first<{ paused_until: number | null }>();
+  return row?.paused_until && row.paused_until > now ? row.paused_until : null;
+}
+
 /** Account-level send errors pause all dispatching until `untilMs`. */
 export async function pauseDispatch(db: D1Database, untilMs: number, reason: string): Promise<void> {
   await db
@@ -308,29 +314,28 @@ export async function completeSend(
   outcome: 'sent' | 'failed',
   detail: { messageId?: string; error?: string; tracked?: boolean } = {},
 ): Promise<boolean> {
-  const res = outcome === 'sent'
-    ? await db
-      .prepare("UPDATE sends SET status = 'sent', sent_at = datetime('now'), message_id = ?, tracked = ?, error = NULL, batch_id = NULL WHERE id = ? AND status = 'pending'")
-      .bind(detail.messageId ?? null, detail.tracked ? 1 : 0, sendId)
-      .run()
-    : await db
-      .prepare("UPDATE sends SET status = 'failed', error = ?, batch_id = NULL WHERE id = ? AND status = 'pending'")
-      .bind((detail.error ?? 'send failed').slice(0, 500), sendId)
-      .run();
-  if (!res.meta?.changes) return false;
-  await db
-    .prepare(`UPDATE campaigns SET ${outcome === 'sent' ? 'sent_count = sent_count + 1' : 'failed_count = failed_count + 1'} WHERE id = ?`)
-    .bind(campaignId)
-    .run();
-  return true;
+  // One transaction: the counter moves only if the row is still pending, then
+  // the row records the outcome, so the two never drift apart.
+  const counter = outcome === 'sent' ? 'sent_count = sent_count + 1' : 'failed_count = failed_count + 1';
+  const [, res] = await db.batch([
+    db.prepare(`UPDATE campaigns SET ${counter} WHERE id = ? AND EXISTS (SELECT 1 FROM sends WHERE id = ? AND status = 'pending')`).bind(campaignId, sendId),
+    outcome === 'sent'
+      ? db
+        .prepare("UPDATE sends SET status = 'sent', sent_at = datetime('now'), message_id = ?, tracked = ?, error = NULL, batch_id = NULL WHERE id = ? AND status = 'pending'")
+        .bind(detail.messageId ?? null, detail.tracked ? 1 : 0, sendId)
+      : db
+        .prepare("UPDATE sends SET status = 'failed', error = ?, batch_id = NULL WHERE id = ? AND status = 'pending'")
+        .bind((detail.error ?? 'send failed').slice(0, 500), sendId),
+  ]);
+  return (res?.meta?.changes ?? 0) > 0;
 }
 
 /** A subscriber who left before delivery: drop the send and shrink the campaign total. */
 export async function dropSend(db: D1Database, sendId: number, campaignId: string): Promise<void> {
-  const res = await db.prepare("DELETE FROM sends WHERE id = ? AND status = 'pending'").bind(sendId).run();
-  if (res.meta?.changes) {
-    await db.prepare('UPDATE campaigns SET total_recipients = MAX(total_recipients - 1, 0) WHERE id = ?').bind(campaignId).run();
-  }
+  await db.batch([
+    db.prepare("UPDATE campaigns SET total_recipients = MAX(total_recipients - 1, 0) WHERE id = ? AND EXISTS (SELECT 1 FROM sends WHERE id = ? AND status = 'pending')").bind(campaignId, sendId),
+    db.prepare("DELETE FROM sends WHERE id = ? AND status = 'pending'").bind(sendId),
+  ]);
 }
 
 /** Transient error for one recipient: back off and let the dispatcher retry it. */

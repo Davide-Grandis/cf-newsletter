@@ -18,9 +18,11 @@ async function runRetention(rawEnv: Env): Promise<void> {
   const days = Math.max(1, Number(env.RETENTION_DAYS));
   const cutoff = `datetime('now', '-${days} days')`;
 
-  // Find expired campaigns + their attachments
+  // Find expired campaigns + their attachments. A campaign still in progress
+  // (dispatched over several days within the daily budget) is kept until it
+  // finishes, so retention never cuts off its remaining subscribers.
   const { results: expired } = await env.DB
-    .prepare(`SELECT id FROM campaigns WHERE created_at < ${cutoff}`)
+    .prepare(`SELECT id FROM campaigns WHERE created_at < ${cutoff} AND status NOT IN ('queued','sending')`)
     .all<{ id: string }>();
 
   for (const c of expired ?? []) {

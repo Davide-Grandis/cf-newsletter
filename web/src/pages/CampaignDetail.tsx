@@ -265,7 +265,7 @@ function StatGroup({ children }: { children: ReactNode }) {
   );
 }
 
-function Stat({ label, value, ok, bad, tip, highlight, sub }: { label: string; value: ReactNode; ok?: boolean; bad?: boolean; tip?: string; highlight?: boolean; sub?: string }) {
+function Stat({ label, value, ok, bad, tip, highlight }: { label: string; value: ReactNode; ok?: boolean; bad?: boolean; tip?: string; highlight?: boolean }) {
   const cls = ok ? 'text-emerald-700 dark:text-emerald-400' : bad ? 'text-red-700 dark:text-red-400' : 'text-slate-900 dark:text-slate-100';
   // Same card style as the dashboard; the highlighted card gets a neutral accent
   // (a stronger frame and a left bar), so only its status badge carries colour.
@@ -278,7 +278,6 @@ function Stat({ label, value, ok, bad, tip, highlight, sub }: { label: string; v
       <div className={`text-2xl font-semibold mt-1 whitespace-nowrap ${cls}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
-      {sub && <div className="text-xs text-slate-400 mt-0.5 dark:text-slate-500" title="Emails sent with open and click tracking">{sub}</div>}
     </div>
   );
 }
@@ -337,7 +336,9 @@ function LinksTable({ campaignId }: { campaignId: string }) {
             {items.map((l) => (
               <tr key={l.url} className="border-t border-slate-100 dark:border-slate-800">
                 <td className="p-2 truncate">
-                  <a href={l.url} target="_blank" rel="noopener noreferrer" title={l.url} className="text-orange-600 hover:underline dark:text-orange-400">{l.url}</a>
+                  {/^https?:\/\//i.test(l.url)
+                    ? <a href={l.url} target="_blank" rel="noopener noreferrer" title={l.url} className="text-orange-600 hover:underline dark:text-orange-400">{l.url}</a>
+                    : <span title={l.url}>{l.url}</span>}
                 </td>
                 <td className="p-2 text-right tabular-nums font-medium">{l.clicks.toLocaleString()}</td>
                 <td className="p-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{l.subscribers.toLocaleString()}</td>

@@ -1990,7 +1990,7 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
     });
   }
 
-  const campMatch = /^\/api\/campaigns\/([^/]+)(?:\/(timeseries|sends|links|replay-failed))?$/.exec(p);
+  const campMatch = /^\/api\/campaigns\/([^/]+)(?:\/(timeseries|sends|links))?$/.exec(p);
   if (campMatch) {
     const id = campMatch[1];
     const sub = campMatch[2];
@@ -2006,8 +2006,8 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         return Response.json({ error: 'not found' }, { status: 404 });
       }
     }
-    // Campaign mutations (e.g. replay-failed) require edit; read-only admins
-    // may only view campaign data.
+    // Campaign mutations (e.g. delete) require edit; read-only admins may only
+    // view campaign data.
     if (m !== 'GET' && !canEdit) return forbidden();
 
     if (m === 'GET' && !sub) {
@@ -2157,16 +2157,6 @@ async function handleApi(req: Request, rawEnv: Env, url: URL): Promise<Response>
         env.DB.prepare('DELETE FROM campaigns WHERE id = ?').bind(id),
       ]);
       return Response.json({ ok: true });
-    }
-
-    if (m === 'POST' && sub === 'replay-failed') {
-      // Counter-only stub. Real replay needs a QUEUE binding here; the consumer
-      // worker is already idempotent on (campaign_id, subscriber_id).
-      const row = await env.DB
-        .prepare("SELECT COUNT(*) AS n FROM sends WHERE campaign_id = ? AND status = 'failed'")
-        .bind(id)
-        .first<{ n: number }>();
-      return Response.json({ ok: false, would_replay: row?.n ?? 0, hint: 'attach QUEUE binding to admin worker to enable' });
     }
   }
 
@@ -2745,7 +2735,7 @@ async function cfJson(env: Env, urlStr: string, init: RequestInit = {}): Promise
 // The installer and updater always deploy the ingest worker under this name.
 const INGEST_WORKER_NAME = 'cf-newsletter-ingest';
 
-function ruleBody(env: Env, addr: string, enabled = true): string {
+function ruleBody(addr: string, enabled = true): string {
   return JSON.stringify({
     name: `newsletter:${addr}`,
     enabled,
@@ -2794,7 +2784,7 @@ async function createRoutingRule(
   if (lookup.warning) return lookup.warning;
   if (lookup.id) return undefined;
   try {
-    await cfJson(env, routingRulesPath(env), { method: 'POST', body: ruleBody(env, addr) });
+    await cfJson(env, routingRulesPath(env), { method: 'POST', body: ruleBody(addr) });
     return undefined;
   } catch (e) {
     return `Email Routing rule not created: ${(e as Error).message}`;
@@ -2814,9 +2804,9 @@ async function moveRoutingRule(
   try {
     const id = await findRoutingRuleId(env, oldAddr);
     if (id) {
-      await cfJson(env, routingRulesPath(env, `/${id}`), { method: 'PUT', body: ruleBody(env, newAddr, enabled) });
+      await cfJson(env, routingRulesPath(env, `/${id}`), { method: 'PUT', body: ruleBody(newAddr, enabled) });
     } else {
-      await cfJson(env, routingRulesPath(env), { method: 'POST', body: ruleBody(env, newAddr, enabled) });
+      await cfJson(env, routingRulesPath(env), { method: 'POST', body: ruleBody(newAddr, enabled) });
     }
     return undefined;
   } catch (e) {
@@ -2836,7 +2826,7 @@ async function setRoutingRuleEnabled(
   try {
     const id = await findRoutingRuleId(env, addr);
     if (id) {
-      await cfJson(env, routingRulesPath(env, `/${id}`), { method: 'PUT', body: ruleBody(env, addr, enabled) });
+      await cfJson(env, routingRulesPath(env, `/${id}`), { method: 'PUT', body: ruleBody(addr, enabled) });
     }
     return undefined;
   } catch (e) {

@@ -141,7 +141,7 @@ export default {
           .prepare("UPDATE subscribers SET status='unsubscribed', verified=0, unsubscribed_at=datetime('now') WHERE id = ?")
           .bind(sub)
           .run();
-        ctx.waitUntil(logEvent(env, 'unsubscribe', unsubCampaignId, sub, req, null, null, nlRow?.newsletter_id ?? null).catch(console.error));
+        ctx.waitUntil(logEvent(env, 'unsubscribe', unsubCampaignId, sub, req, null).catch(console.error));
         if (isOneClick) return new Response('', { status: 200 });
         return htmlResponse(unsubSuccessPage(nlRow?.name ?? 'this newsletter', nlRow?.email ?? ''));
       }
@@ -522,7 +522,6 @@ async function logEvent(
   req: Request,
   url: string | null,
   attachmentId: number | null = null,
-  newsletterId: string | null = null,
 ): Promise<void> {
   await env.DB
     .prepare(

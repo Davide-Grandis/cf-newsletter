@@ -1,8 +1,8 @@
 # Application updates
 
 In-app updates are the primary update path. A super admin opens Settings ->
-Updates and reviews the published stable GitHub release. **Update with
-Cloudflare** records a single-use update intent and opens the hosted installer.
+Updates and reviews the published stable GitHub release. **Update** records a
+single-use update intent and opens the hosted installer.
 The operator authorizes the Cloudflare account through OAuth; the installer
 verifies the intent, checks compatibility and asks for final approval before
 submitting the durable job. Regular newsletter admins cannot request updates.

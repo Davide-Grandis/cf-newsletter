@@ -157,7 +157,6 @@ export default function NewsletterDetail() {
         n={n}
         domain={domain}
         defaultSenderLocal={defaultSenderLocal}
-        canEdit={canEdit}
         editing={editingSettings}
         onCancel={() => setEditingSettings(false)}
         onSaved={() => setEditingSettings(false)}
@@ -253,7 +252,6 @@ function Settings({
   n,
   domain,
   defaultSenderLocal,
-  canEdit,
   editing,
   onCancel,
   onSaved,
@@ -263,7 +261,6 @@ function Settings({
   n: Newsletter;
   domain: string;
   defaultSenderLocal: string;
-  canEdit: boolean;
   editing: boolean;
   onCancel: () => void;
   onSaved: () => void;

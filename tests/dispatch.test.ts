@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import consumer, { type Env as ConsumerEnv } from '../workers/consumer/src/index';
 import admin, { type Env as AdminEnv } from '../workers/admin/src/index';
+import cleanup, { type Env as CleanupEnv } from '../workers/cleanup/src/index';
 import { createPendingSends, dispatch, sqlTime, STALE_CLAIM_MS } from '../shared/dispatch';
 import { computeDemand } from '../shared/db';
 import type { QueueMessage } from '../shared/types';
@@ -365,4 +366,42 @@ test('a newsletter admin sees only their newsletters\' emails scheduled to send'
   };
   assert.equal(await scheduled('nl-admin@example.com'), 3, 'Only the admin\'s newsletter: c1 has 3 left (the done campaign adds nothing)');
   assert.equal(await scheduled('root@example.com'), 12, 'A super admin sees every newsletter: 3 + 9');
+});
+
+test('a batch delivered while sending is paused goes back to the backlog without send attempts', async () => {
+  const f = fixture({ batchSize: 2 });
+  f.addSubscribers(4);
+  await f.ingest();
+  f.queued.length = 0;
+  await dispatch(f.env, { capacity: 4, batchSize: 2, nextWindowMs: Date.now() + 3_600_000 });
+  const batches = f.queued.filter((m) => m.body.kind === 'send');
+  assert.equal(batches.length, 2);
+  // The first batch hits the daily limit on its first send and pauses sending.
+  f.fail('s1@example.org', coded('E_DAILY_LIMIT_EXCEEDED'));
+  const attempts: string[] = [];
+  const send = f.env.SEND_EMAIL.send.bind(f.env.SEND_EMAIL);
+  f.env.SEND_EMAIL.send = (async (m: { to: string }) => { attempts.push(m.to); return send(m as never); }) as never;
+  f.queued.length = 0;
+  await consumer.queue({ messages: batches.map((m) => ({ body: m.body, ack() {}, retry() {} })) } as never, f.env, {} as ExecutionContext);
+  assert.deepEqual(attempts, ['s1@example.org'], 'The second batch made no send attempt');
+  assert.equal(f.row("SELECT COUNT(*) AS n FROM sends WHERE status = 'pending' AND batch_id IS NULL").n, 4, 'Both batches are back in the backlog');
+  assert.equal(f.row("SELECT COUNT(*) AS n FROM sends WHERE status = 'failed'").n, 0);
+  assert.equal(f.row("SELECT delivery_state FROM campaigns WHERE id = 'c1'").delivery_state, 'paused');
+});
+
+test('retention keeps a campaign that is still being delivered', async () => {
+  const f = fixture();
+  f.addSubscribers(2);
+  await f.ingest();
+  f.sqlite.exec(`
+    UPDATE campaigns SET created_at = datetime('now', '-200 days') WHERE id = 'c1';
+    INSERT INTO campaigns (id, newsletter_id, subject, sent_by, status, created_at) VALUES ('old', 'nl', 'Old', 'a@example.com', 'done', datetime('now', '-200 days'));
+  `);
+  const deleted: string[] = [];
+  const archive = { async delete(key: string) { deleted.push(key); } } as unknown as R2Bucket;
+  let work: Promise<unknown> = Promise.resolve();
+  await cleanup.scheduled({} as ScheduledEvent, { DB: f.db, ARCHIVE: archive } as CleanupEnv, { waitUntil(p: Promise<unknown>) { work = p; } } as ExecutionContext);
+  await work;
+  assert.deepEqual(f.rows('SELECT id FROM campaigns ORDER BY id').map((r) => r.id), ['c1'], 'The finished old campaign is removed; the in-progress one stays');
+  assert.equal(f.row("SELECT COUNT(*) AS n FROM sends WHERE campaign_id = 'c1'").n, 2);
 });

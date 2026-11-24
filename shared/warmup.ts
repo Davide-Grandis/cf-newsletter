@@ -67,8 +67,6 @@ function posNumOr(v: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-const MS_PER_DAY = 24 * 3600 * 1000;
-
 /**
  * Warmup daily cap for day `t` (1-based). Geometric progression from minDaily
  * to maxDaily over totalDays days. Days beyond totalDays return maxDaily.

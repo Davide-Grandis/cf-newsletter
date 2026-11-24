@@ -12,11 +12,12 @@ export interface Env {
   SOFT_BOUNCE_WINDOW_DAYS: string;
 }
 
-// Interval in minutes used to calculate post-send checks.
-const CRON_PERIOD_MINUTES = 10;
+// The cron period in minutes: the installer schedules this worker every 30
+// minutes (as does wrangler.toml).
+const CRON_PERIOD_MINUTES = 30;
 // Post-send delivery-failure syncs to run after a campaign sends.
-// 18 checks x 10 min ~= 3 hours of fast bounce coverage.
-const MAX_CHECKS = 18;
+// 6 checks x 30 min ~= 3 hours of fast bounce coverage.
+const MAX_CHECKS = 6;
 // A send completing within this window (minutes) tops the counter back up to
 // MAX_CHECKS. Slightly wider than the cron period so no completed send is
 // missed between ticks.
@@ -83,7 +84,7 @@ export default {
 // Scheduled: GraphQL delivery-failure sync
 // ---------------------------------------------------------------------------
 
-// The cron fires every CRON_PERIOD_MINUTES (10). The GraphQL delivery-failure
+// The cron fires every CRON_PERIOD_MINUTES (30). The GraphQL delivery-failure
 // query is zone-wide (covers all campaigns at once), so a single global
 // counter — not a per-campaign schedule — decides whether to sync. Each tick:
 //   1. Top up the counter to MAX_CHECKS if any campaign sent recently.

@@ -370,14 +370,14 @@ All other inbound mail is silently dropped (no state mutation).
 The `emailSendingAdaptive` GraphQL query is **zone-wide** (it returns delivery
 failures for every campaign at once), so the worker uses a single global
 counter — `bounce_check_state.checks_to_go` — rather than a per-campaign
-schedule. The cron fires every **10 minutes**. Each tick:
+schedule. The cron fires every **30 minutes**. Each tick:
 
 1. **Top up**: if any campaign sent within the last ~15 min, reset
-   `checks_to_go` to **18** (capped — never higher). A still-sending campaign
+   `checks_to_go` to **6** (capped — never higher). A still-sending campaign
    keeps the counter topped up; the 3-hour countdown begins once sending stops.
 2. **Sync**: if `checks_to_go > 0`, or once daily at 04:00 UTC, call
    `syncDeliveryEvents` (one zone-wide sync covers all campaigns).
-3. **Decrement**: if `checks_to_go > 0`, subtract 1. 18 checks × 10 min ≈ 3 h.
+3. **Decrement**: if `checks_to_go > 0`, subtract 1. 6 checks × 30 min ≈ 3 h.
 
 `syncDeliveryEvents` queries `emailSendingAdaptive` (GraphQL) for
 `deliveryFailed` events in the last 25 hours, matches each to a `sends`
@@ -502,8 +502,9 @@ display the signed-in user's name.
 
 ### Extension points
 
-- DLQ replay endpoint that drains `cf-newsletter-dlq` and re-enqueues to
-  `cf-newsletter-queue`.
 - Per-subscriber send history (`SELECT * FROM sends WHERE subscriber_id =
   ?`).
-- Resend-failed: `INSERT INTO queue ... WHERE campaign_id=? AND status='failed'`.
+- Resend failed: set a campaign's `failed` sends back to `pending` (and lower
+  `failed_count`); the dispatcher sends them within the daily budget.
+- Cancel a scheduled campaign: delete its `pending` sends that aren't claimed
+  and lower `total_recipients`.
