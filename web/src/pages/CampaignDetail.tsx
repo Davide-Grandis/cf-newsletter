@@ -91,7 +91,7 @@ export default function CampaignDetail() {
 
       {detail.data && (
         <>
-          <StatRow title="Delivery" className="grid-cols-1 lg:grid-cols-[1fr_3fr_3fr]">
+          <StatRow title="Delivery" className="grid-cols-1 xl:grid-cols-[9rem_1fr_1fr]">
             <div className="p-2">
               <Stat label="Status" highlight value={<CampaignStatus status={detail.data.campaign.status} />} />
             </div>
@@ -191,7 +191,7 @@ function StatRow({ title, className, children }: { title: string; className: str
 // A light background that groups related cards within a row.
 function StatGroup({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-3 gap-3 rounded-xl bg-slate-100/70 p-2 dark:bg-slate-800/30">{children}</div>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl bg-slate-100/70 p-2 dark:bg-slate-800/30">{children}</div>
   );
 }
 
@@ -204,8 +204,8 @@ function Stat({ label, value, ok, bad, tip, highlight }: { label: string; value:
     : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800';
   return (
     <div className={`rounded-lg shadow-sm border p-4 ${frame}`} title={tip}>
-      <div className={`text-xs uppercase tracking-wide ${highlight ? 'font-bold text-slate-700 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>{label}</div>
-      <div className={`text-2xl font-semibold mt-1 ${cls}`}>
+      <div className={`text-xs uppercase tracking-wide whitespace-nowrap ${highlight ? 'font-bold text-slate-700 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>{label}</div>
+      <div className={`text-2xl font-semibold mt-1 whitespace-nowrap ${cls}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
     </div>
