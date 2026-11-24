@@ -219,6 +219,14 @@ All served by the **tracker worker** (`workers/tracker/src/index.ts`) at
    **anti-enumeration** measure: the response can't reveal who is already
    subscribed.
 
+   For an address that is already an **active, confirmed** subscriber, steps 5
+   and 6 are skipped: the record is left unchanged and, instead of a
+   confirmation, the address receives a short **"You're already subscribed"**
+   email with its unsubscribe link (`notifyAlreadySubscribed()`, also via
+   `ctx.waitUntil`). That notice is sent at most once a day per subscriber,
+   using the `tracker` / `already_subscribed_notice` log entry, so the form
+   can't be used to flood a subscriber's mailbox.
+
 **`GET /verify/<id>?t=<confirm_token>`** (`handleVerify()`)
 
 1. Loads the row's `confirm_token`.

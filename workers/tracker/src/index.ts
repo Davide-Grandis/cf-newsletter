@@ -1,5 +1,5 @@
 import { EmailMessage } from 'cloudflare:email';
-import { verifyHmac } from '../../../shared/tracking';
+import { unsubscribeUrl, verifyHmac } from '../../../shared/tracking';
 import { buildEmail, sanitizeDisplayName } from '../../../shared/mime';
 import { defaultSender, loadSettings, resolveTrackingBaseUrl, trackingEnabledGlobally } from '../../../shared/settings';
 import { writeLog } from '../../../shared/db';
@@ -243,18 +243,16 @@ async function handleSubscribe(
     }
 
     const existing = await env.DB
-      .prepare('SELECT id, status, confirm_token FROM subscribers WHERE newsletter_id = ? AND email = ?')
+      .prepare('SELECT id, status, token, confirm_token FROM subscribers WHERE newsletter_id = ? AND email = ?')
       .bind(nl.id, email)
-      .first<{ id: number; status: string; confirm_token: string | null }>();
+      .first<{ id: number; status: string; token: string; confirm_token: string | null }>();
 
-    // Already active and confirmed: tell the user explicitly.
+    // Already active and confirmed: the page is the same as for a new signup,
+    // so the form never reveals who is subscribed. The record is left as it is,
+    // and only the mailbox owner is told, by email (at most once a day).
     if (existing && existing.status === 'active' && existing.confirm_token === null) {
-      return htmlResponse(
-        pageShell(
-          'Already subscribed',
-          `<p>You are already subscribed to <strong>${escapeHtml(nl.name)}</strong>.</p>`,
-        ),
-      );
+      ctx.waitUntil(notifyAlreadySubscribed(env, cfg, nl, email, existing.id, existing.token).catch(console.error));
+      return htmlResponse(checkInboxPage(email));
     }
 
     // New subscriber or unconfirmed/inactive: upsert and send confirmation.
@@ -301,17 +299,72 @@ async function handleSubscribe(
       );
     }
 
-    return htmlResponse(
-      pageShell(
-        'Almost there',
-        `<p>Thanks! We've sent a confirmation link to <strong>${escapeHtml(email)}</strong>.</p>` +
-          '<p>Please open that email and click the link to complete your subscription. ' +
-          "If you don't see it, check your spam folder.</p>",
-      ),
-    );
+    return htmlResponse(checkInboxPage(email));
   }
 
   return new Response('method not allowed', { status: 405 });
+}
+
+// The response to every valid signup, whether or not the address is already
+// subscribed.
+function checkInboxPage(email: string): string {
+  return pageShell(
+    'Almost there',
+    `<p>Thanks! We've sent an email to <strong>${escapeHtml(email)}</strong>.</p>` +
+      '<p>Please open it to complete your subscription. ' +
+      "If you don't see it, check your spam folder.</p>",
+  );
+}
+
+const ALREADY_SUBSCRIBED_EVENT = 'already_subscribed_notice';
+
+/**
+ * Tell an existing subscriber that someone (probably they) tried to subscribe
+ * again. At most one notice per address and newsletter a day, so the form
+ * can't be used to flood a mailbox.
+ */
+async function notifyAlreadySubscribed(env: Env, cfg: Env, nl: NewsletterRow, email: string, subscriberId: number, token: string): Promise<void> {
+  if (!env.SEND_EMAIL) return;
+  const recent = await env.DB
+    .prepare(
+      "SELECT 1 AS x FROM logs WHERE source = 'tracker' AND event = ? AND newsletter_id = ? " +
+        "AND json_extract(detail, '$.subscriberId') = ? AND ts > datetime('now', '-1 day') LIMIT 1",
+    )
+    .bind(ALREADY_SUBSCRIBED_EVENT, nl.id, subscriberId)
+    .first();
+  if (recent) return;
+  const base = (cfg.TRACKING_BASE_URL ?? '').replace(/\/+$/, '');
+  const unsubUrl = unsubscribeUrl(base, subscriberId, token);
+  const fromHeader = nl.from_address || defaultSender(cfg.BASE_DOMAIN ?? '');
+  const messageId = `${crypto.randomUUID()}@${cfg.BASE_DOMAIN ?? 'localhost'}`;
+  const safeName = escapeHtml(nl.name);
+  const safeUnsub = escapeHtml(unsubUrl);
+  const html =
+    `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#0f172a">` +
+    `<h1 style="font-size:18px">You're already subscribed</h1>` +
+    `<p>Someone, probably you, asked to subscribe this address to <strong>${safeName}</strong>. ` +
+    `You're already subscribed, so there's nothing to do: you'll keep receiving it as before.</p>` +
+    `<p style="font-size:13px;color:#64748b">If you no longer want to receive ${safeName}, you can <a href="${safeUnsub}" style="color:#2563eb">unsubscribe</a>.</p>` +
+    `<p style="font-size:12px;color:#94a3b8">If you didn't request this, you can safely ignore this email.</p>` +
+    `</div>`;
+  const text =
+    `You're already subscribed to ${nl.name}\n\n` +
+    `Someone, probably you, asked to subscribe this address to ${nl.name}. ` +
+    `You're already subscribed, so there's nothing to do.\n\n` +
+    `To stop receiving it, unsubscribe here: ${unsubUrl}\n\n` +
+    `If you didn't request this, you can safely ignore this email.`;
+  const raw = buildEmail({
+    from: fromHeader, to: email, subject: `You're already subscribed to ${nl.name}`, messageId, text, html,
+    attachments: [], headers: { 'X-Entity-Ref-ID': messageId },
+  });
+  await env.SEND_EMAIL.send(new EmailMessage(extractAddr(fromHeader), email, raw));
+  await writeLog(env.DB, {
+    source: 'tracker',
+    event: `tracker.${ALREADY_SUBSCRIBED_EVENT}`,
+    newsletterId: nl.id,
+    message: `Signup for an existing subscriber: "already subscribed" notice sent to ${email}`,
+    detail: { email, subscriberId },
+  });
 }
 
 async function handleVerify(env: Env, sub: number, token: string): Promise<Response> {
