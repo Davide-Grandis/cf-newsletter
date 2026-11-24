@@ -42,7 +42,7 @@ export default function CampaignDetail() {
   const evt = Object.fromEntries((detail.data?.events ?? []).map((e) => [e.type, e.n]));
   const tracking = trackingState(detail.data?.campaign);
   const tracked = detail.data?.campaign.tracked_count ?? 0;
-  const openClickSub = tracking === 'partial' ? `of ${tracked.toLocaleString()} tracked email${tracked === 1 ? '' : 's'}` : undefined;
+  const openClickSub = tracking === 'partial' ? `of ${tracked.toLocaleString()} tracked` : undefined;
   const chartData = pivotTimeseries(ts.data?.items ?? []);
 
   const refreshing = detail.isFetching || ts.isFetching;
@@ -110,12 +110,18 @@ export default function CampaignDetail() {
             </StatGroup>
           </StatRow>
           <ReleaseNote campaign={detail.data.campaign} />
-          <StatRow title="Analytics" className={tracking === 'off' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-5'}>
-            {tracking !== 'off' && <Stat label="Opens" value={evt.open ?? 0} sub={openClickSub} />}
-            {tracking !== 'off' && <Stat label="Clicks" value={evt.click ?? 0} sub={openClickSub} />}
-            <Stat label="Unsubs" value={evt.unsubscribe ?? 0} />
-            <Stat label="Downloads" value={evt.download ?? 0} />
-            <Stat label="Attachments" value={detail.data.campaign.attachment_count} />
+          <StatRow title="Analytics" className={tracking === 'off' ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-[2fr_3fr]'}>
+            {tracking !== 'off' && (
+              <StatGroup cols={2}>
+                <Stat label="Opens" tip="From open tracking" value={evt.open ?? 0} sub={openClickSub} />
+                <Stat label="Clicks" tip="From click tracking" value={evt.click ?? 0} sub={openClickSub} />
+              </StatGroup>
+            )}
+            <StatGroup>
+              <Stat label="Unsubs" value={evt.unsubscribe ?? 0} />
+              <Stat label="Downloads" value={evt.download ?? 0} />
+              <Stat label="Attachments" value={detail.data.campaign.attachment_count} />
+            </StatGroup>
           </StatRow>
           {tracking === 'off' && (
             <p className="text-xs text-slate-500 dark:text-slate-400 -mt-3">Open and click tracking was off for this campaign.</p>
@@ -212,9 +218,9 @@ function StatRow({ title, className, children }: { title: string; className: str
 }
 
 // A light background that groups related cards within a row.
-function StatGroup({ children }: { children: ReactNode }) {
+function StatGroup({ children, cols = 3 }: { children: ReactNode; cols?: 2 | 3 }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl bg-slate-100/70 p-2 dark:bg-slate-800/30">{children}</div>
+    <div className={`grid grid-cols-1 ${cols === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3 rounded-xl bg-slate-100/70 p-2 dark:bg-slate-800/30`}>{children}</div>
   );
 }
 
@@ -231,7 +237,7 @@ function Stat({ label, value, ok, bad, tip, highlight, sub }: { label: string; v
       <div className={`text-2xl font-semibold mt-1 whitespace-nowrap ${cls}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
-      {sub && <div className="text-xs text-slate-400 mt-0.5 whitespace-nowrap dark:text-slate-500">{sub}</div>}
+      {sub && <div className="text-xs text-slate-400 mt-0.5 dark:text-slate-500" title="Emails sent with open and click tracking">{sub}</div>}
     </div>
   );
 }
