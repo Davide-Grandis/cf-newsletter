@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import consumer, { type Env as ConsumerEnv } from '../workers/consumer/src/index';
 import admin, { type Env as AdminEnv } from '../workers/admin/src/index';
 import { createPendingSends, dispatch, sqlTime, STALE_CLAIM_MS } from '../shared/dispatch';
+import { computeDemand } from '../shared/db';
 import type { QueueMessage } from '../shared/types';
 
 const schema = readFileSync(resolve(process.env.PRODUCT_ROOT ?? 'product', 'db/schema.sql'), 'utf8');
@@ -116,8 +117,16 @@ test('a campaign larger than the daily cap continues day after day without retri
   assert.ok(ticks[0]!.delaySeconds > 0 && ticks[0]!.delaySeconds <= 86_400);
   assert.equal(f.queued.length, 1);
 
+  // The dashboard's Backlog (computeDemand) is every email still to send: here 8 - 3.
+  const pending = () => Number(f.row("SELECT COUNT(*) AS n FROM sends WHERE status = 'pending'").n);
+  assert.equal(await computeDemand(f.db), 5);
+  assert.equal(await computeDemand(f.db), pending());
   let retries = 0;
-  for (let day = 2; day <= 5 && f.delivered.length < 8; day++) retries += await f.nextDay();
+  for (let day = 2; day <= 5 && f.delivered.length < 8; day++) {
+    retries += await f.nextDay();
+    assert.equal(await computeDemand(f.db), pending(), `Backlog matches the pending sends on day ${day}`);
+  }
+  assert.equal(await computeDemand(f.db), 0, 'Nothing left once the campaign is done');
   assert.equal(retries, 0, 'Waiting for the next day never uses a queue retry');
   assert.equal(f.delivered.length, 8);
   assert.equal(new Set(f.delivered).size, 8, 'Nobody receives the campaign twice');
