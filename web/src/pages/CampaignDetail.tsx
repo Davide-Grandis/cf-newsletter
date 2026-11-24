@@ -204,7 +204,7 @@ function Stat({ label, value, ok, bad, tip, highlight }: { label: string; value:
     : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800';
   return (
     <div className={`rounded-lg shadow-sm border p-4 ${frame}`} title={tip}>
-      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
+      <div className={`text-xs uppercase tracking-wide ${highlight ? 'font-bold text-slate-700 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>{label}</div>
       <div className={`text-2xl font-semibold mt-1 ${cls}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
